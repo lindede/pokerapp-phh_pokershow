@@ -1,0 +1,18 @@
+{
+	"pages": [ //pages数组中第一项表示应用启动页，参考：https://uniapp.dcloud.io/collocation/pages
+		{
+			"path": "pages/index/index",
+			"style": {
+				"navigationBarTitleText": "德扑秀",
+				"navigationStyle": "default",
+				"enablePullDownRefresh": false
+			}
+		}
+	],
+	"globalStyle": {
+		"navigationBarTextStyle": "white",
+		"navigationBarTitleText": "德扑秀",
+		"navigationBarBackgroundColor": "#14532d",
+		"backgroundColor": "#0f3d26"
+	}
+}
