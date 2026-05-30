@@ -1,7 +1,7 @@
 {
-    "name" : "德扑秀",
-    "appid" : "",
-    "description" : "德扑秀 · 德州扑克手牌解说（H5 / 微信与抖音小程序同源）",
+    "name" : "博弈秀",
+    "appid" : "wx068cfd6099a06f9f",
+    "description" : "博弈秀 · 德州扑克手牌解说（H5 / 微信与抖音小程序同源）",
     "versionName" : "1.0.0",
     "versionCode" : "100",
     "transformPx" : false,
@@ -50,7 +50,7 @@
     "quickapp" : {},
     /* 小程序特有相关 */
     "mp-weixin" : {
-        "appid" : "",
+        "appid" : "wx068cfd6099a06f9f",
         "setting" : {
             "urlCheck" : false
         },
@@ -66,7 +66,7 @@
         "usingComponents" : true
     },
     "h5" : {
-        "title" : "德扑秀",
+        "title" : "博弈技术学习",
         "router" : {
             "mode" : "hash",
             "base" : "./"

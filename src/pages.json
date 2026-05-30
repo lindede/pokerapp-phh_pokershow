@@ -3,7 +3,7 @@
 		{
 			"path": "pages/index/index",
 			"style": {
-				"navigationBarTitleText": "德扑秀",
+				"navigationBarTitleText": "博弈技术学习",
 				"navigationStyle": "default",
 				"enablePullDownRefresh": false
 			}
@@ -11,7 +11,7 @@
 	],
 	"globalStyle": {
 		"navigationBarTextStyle": "white",
-		"navigationBarTitleText": "德扑秀",
+		"navigationBarTitleText": "博弈技术学习",
 		"navigationBarBackgroundColor": "#14532d",
 		"backgroundColor": "#0f3d26"
 	}

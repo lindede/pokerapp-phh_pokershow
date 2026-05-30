@@ -1,19 +1,35 @@
 <template>
-  <view class="page-root">
+  <LaunchIntroModal :skip="skipIntroModal" />
+  <view class="page-root" :class="{ 'page-root--rv': skipIntroModal }">
     <!-- 牌桌 → 玩家 → 解说顺序排在同一纵向滚动里，不再与玩家区分栏抢占高度 -->
-    <scroll-view class="page-scroll" scroll-y :show-scrollbar="false">
+    <scroll-view
+      class="page-scroll"
+      scroll-y
+      :show-scrollbar="false"
+      :style="scrollViewStyle"
+    >
       <view class="page-inner">
         <view class="panel panel-board">
-          <view class="community-row">
-            <PokerCard
-              v-for="(c, idx) in state.board"
-              :key="idx"
-              :code="c"
-              size="lg"
-            />
-          </view>
-          <view class="pot-bar">
-            <text class="pot-text">$ 底池 {{ state.pot }}</text>
+          <view class="board-row">
+            <view class="board-pot-col">
+              <view class="pot-bar">
+                <view class="pot-chip-ico" aria-hidden="true">
+                  <view class="pot-chip-disc pot-chip-disc--back"></view>
+                  <view class="pot-chip-disc pot-chip-disc--front"></view>
+                </view>
+                <text class="pot-text">底池 {{ state.pot }}</text>
+              </view>
+              <text v-if="blindsLevelText" class="blinds-level">{{ blindsLevelText }}</text>
+            </view>
+            <view class="community-row">
+              <PokerCard
+                v-for="(c, idx) in state.board"
+                :key="idx"
+                :code="c"
+                size="lg"
+                :highlight="boardHighlightSet.has(idx)"
+              />
+            </view>
           </view>
         </view>
 
@@ -31,19 +47,28 @@
               <view class="player-left">
                 <view class="player-head">
                   <view class="title-line">
-                    <text class="pos-ico">{{ positionIcon(p.positionKey) }}</text>
-                    <text class="pos-lab">{{ p.positionLabel }}</text>
+                    <view
+                      class="pos-badge"
+                      :class="`pos-badge--${p.positionKey}`"
+                    >
+                      <text class="pos-badge-txt">{{ positionNameZh(p) }}</text>
+                    </view>
                     <text class="p-name">{{ p.name }}</text>
                   </view>
                 </view>
                 <view class="p-meta-line">
-                  <text class="p-meta-bit">筹 {{ p.stack }}</text>
+                  <view class="p-meta-group">
+                    <view class="p-chip-ico p-chip-ico--stack" aria-hidden="true"></view>
+                    <text class="p-meta-val">{{ p.stack }}</text>
+                  </view>
                   <text class="p-meta-sep">·</text>
-                  <text class="p-meta-bit">注 </text>
-                  <text
-                    class="p-bet-inline"
-                    :class="{ 'bet-on': p.bet > 0 }"
-                  >{{ p.bet }}</text>
+                  <view class="p-meta-group">
+                    <view class="p-chip-ico p-chip-ico--bet" aria-hidden="true"></view>
+                    <text
+                      class="p-bet-inline p-meta-val"
+                      :class="{ 'bet-on': p.bet > 0 }"
+                    >{{ p.bet }}</text>
+                  </view>
                 </view>
               </view>
               <view class="player-cards-block">
@@ -72,6 +97,7 @@
                         <view
                           v-if="st === 'river' && showWinsTag(p)"
                           class="action-trail-item action-wins-tag"
+                          :class="{ 'action-wins-tag--celebrate': winsTagCelebrate(p) }"
                         >
                           <text class="action-trail-label">WINS</text>
                         </view>
@@ -82,14 +108,18 @@
                     <view v-if="p.action" class="action-pill">
                       <text class="action-txt">{{ p.action }}</text>
                     </view>
-                    <view v-if="showWinsTag(p)" class="action-trail-item action-wins-tag">
+                    <view
+                      v-if="showWinsTag(p)"
+                      class="action-trail-item action-wins-tag"
+                      :class="{ 'action-wins-tag--celebrate': winsTagCelebrate(p) }"
+                    >
                       <text class="action-trail-label">WINS</text>
                     </view>
                   </template>
                 </view>
                 <view class="hole-row">
-                  <PokerCard :code="p.hole[0]" size="sm" />
-                  <PokerCard :code="p.hole[1]" size="sm" />
+                  <PokerCard :code="p.hole[0]" size="lg" />
+                  <PokerCard :code="p.hole[1]" size="lg" />
                 </view>
               </view>
             </view>
@@ -117,26 +147,28 @@
                     <text class="nar-step-glyph">‹</text>
                   </view>
                   <view class="nar-head-center-wrap">
-                    <text class="nar-head nar-head-center">{{ state.replayHeadline }}</text>
-                    <text
-                      v-if="state.replayHeadlineChips"
-                      class="nar-head-chips"
-                    >{{ state.replayHeadlineChips }}</text>
+                    <text class="nar-head nar-head-center nar-head-inline">
+                      {{ state.replayHeadline }}<text
+                        v-if="state.replayHeadlineChips"
+                        class="nar-head-chips"
+                      > {{ state.replayHeadlineChips }}</text>
+                    </text>
                   </view>
                   <view class="nar-step-hit" @tap.stop="onTapNextAction">
                     <text class="nar-step-glyph">›</text>
                   </view>
                 </view>
-              <text v-if="state.replayDetailText" class="nar-body">{{ state.replayDetailText }}</text>
+              <text v-if="state.replayDetailText" class="nar-body" user-select>{{ state.replayDetailText }}</text>
               <text v-else class="nar-body nar-muted">此步无解说正文</text>
             </template>
             <template v-else>
-              <text v-if="state.serverSummary" class="nar-summary">{{ state.serverSummary }}</text>
+              <text v-if="state.serverSummary" class="nar-summary" user-select>{{ state.serverSummary }}</text>
               <text
                 v-for="(a, i) in state.serverByAction"
                 v-show="a.text && a.text.trim()"
                 :key="'srv-' + i"
                 class="nar-action"
+                user-select
               >{{ a.text }}</text>
               <text
                 v-if="!state.serverSummary && !serverByActionHasText"
@@ -150,7 +182,8 @@
       </view>
     </scroll-view>
 
-    <view class="dock">
+    <view v-if="!skipIntroModal" class="dock">
+      <text v-if="!isMpWeixin" class="icp-record" @tap="openBeianLink">琼ICP备2026007033号</text>
       <view class="replay-dock">
         <view class="replay-row">
           <text
@@ -176,6 +209,13 @@
               <text class="replay-remain">{{ formatMs(replayRemainingMs) }}</text>
             </view>
           </view>
+          <view
+            class="voice-toggle"
+            :class="{ 'voice-toggle--off': !state.voiceOpen }"
+            @tap="toggleVoiceOpen"
+          >
+            <text class="voice-glyph">{{ state.voiceOpen ? "🔊" : "🔇" }}</text>
+          </view>
           <text
             class="nav-hand"
             :class="{ 'nav-disabled': state.loading }"
@@ -190,9 +230,22 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from "vue";
+import { computed, onMounted, ref } from "vue";
+// #ifdef MP-WEIXIN
+import { onLoad, onShareAppMessage } from "@dcloudio/uni-app";
+// #endif
+import LaunchIntroModal from "@/components/LaunchIntroModal.vue";
 import PokerCard from "@/components/PokerCard.vue";
 import { useCommentaryHand } from "@/composables/useCommentaryHand";
+import { boardIndicesForDealBoardStep } from "@/utils/replayByAction";
+import { getWindowMetrics } from "@/utils/layout";
+import {
+  applyReviewLaunchViewport,
+  hasLaunchHandParams,
+  isReviewLaunchMode,
+  parseLaunchQuery,
+  parseMpLaunchOptions,
+} from "@/utils/launchQuery";
 import type {
   PlayerState,
   ReplayActionTrailItem,
@@ -207,6 +260,32 @@ const ACTION_TRAIL_STREETS: Street[] = [
   "river",
 ];
 
+const launchQuery = parseLaunchQuery();
+const skipIntroModal = isReviewLaunchMode(launchQuery);
+const isMpWeixin = process.env.UNI_PLATFORM === "mp-weixin";
+
+// #ifdef H5
+if (skipIntroModal) {
+  applyReviewLaunchViewport();
+}
+// #endif
+
+const BEIAN_URL = "https://beian.miit.gov.cn";
+
+function openBeianLink() {
+  // #ifdef H5
+  window.open(BEIAN_URL, "_blank");
+  // #endif
+  // #ifndef H5
+  uni.setClipboardData({
+    data: BEIAN_URL,
+    success: () => {
+      uni.showToast({ title: "链接已复制，请在浏览器打开", icon: "none" });
+    },
+  });
+  // #endif
+}
+
 function actionTrailForStreet(
   p: PlayerState,
   st: Street,
@@ -217,12 +296,14 @@ function actionTrailForStreet(
 
 const {
   state,
-  loadApi,
+  loadFresh,
+  loadSample,
   loadPrevHand,
   loadNextHand,
   toggleReplayPlay,
   seekReplayPercent,
   seekReplayStepDelta,
+  toggleVoiceOpen,
 } = useCommentaryHand();
 
 let narrTouchStartX = 0;
@@ -272,8 +353,8 @@ function onNarrationTouchEnd(e: TouchEvent) {
   const minSwipe = 36;
   if (adx < minSwipe) return;
   if (adx <= ady * 0.92) return;
-  if (dx < 0) seekReplayStepDelta(1);
-  else seekReplayStepDelta(-1);
+  if (dx < 0) seekReplayStepDelta(-1);
+  else seekReplayStepDelta(1);
 }
 
 function onTapPrevAction() {
@@ -286,8 +367,70 @@ function onTapNextAction() {
   seekReplayStepDelta(1);
 }
 
+/** 小程序 scroll-view 必须明确高度（px），不能用 H5 的 flex+height:0 */
+const scrollHeightPx = ref(0);
+const scrollViewStyle = computed(() =>
+  scrollHeightPx.value > 0 ? { height: `${scrollHeightPx.value}px` } : {},
+);
+
+function updateScrollHeight() {
+  const sys = getWindowMetrics();
+  const dockRpx = skipIntroModal ? 0 : 150;
+  const dockPx = (dockRpx * sys.windowWidth) / 750;
+  scrollHeightPx.value = Math.max(200, Math.floor(sys.windowHeight - dockPx));
+}
+
+function scheduleRemoteLoad(mpLaunch?: ReturnType<typeof parseMpLaunchOptions>) {
+  loadFresh({
+    silentToast: true,
+    fallbackSampleOnFail: true,
+    silentOnFail: true,
+    ...(mpLaunch && hasLaunchHandParams(mpLaunch)
+      ? {
+          initialDatasetKey: mpLaunch.k!.trim(),
+          initialHandIndex: mpLaunch.i!.trim(),
+        }
+      : {}),
+  });
+}
+
+// #ifdef MP-WEIXIN
+onLoad((options) => {
+  const mpLaunch = parseMpLaunchOptions(options);
+  loadSample({ silent: true });
+  setTimeout(() => scheduleRemoteLoad(mpLaunch), 400);
+});
+
+onShareAppMessage(() => {
+  const k = state.datasetKey?.trim() || "all";
+  const i = state.handIndex?.trim() ?? "-1";
+  return {
+    title: "博弈技术学习",
+    path: `/pages/index/index?k=${encodeURIComponent(k)}&i=${encodeURIComponent(i)}`,
+  };
+});
+// #endif
+
 onMounted(() => {
-  loadApi({ silentToast: true });
+  updateScrollHeight();
+  // #ifdef H5
+  if (skipIntroModal) {
+    applyReviewLaunchViewport();
+    updateScrollHeight();
+  }
+  // #endif
+  // #ifndef MP-WEIXIN
+  loadFresh({
+    silentToast: true,
+    fallbackSampleOnFail: true,
+    ...(hasLaunchHandParams(launchQuery)
+      ? {
+          initialDatasetKey: launchQuery.k!.trim(),
+          initialHandIndex: launchQuery.i!.trim(),
+        }
+      : {}),
+  });
+  // #endif
 });
 
 function onTapPrevHand() {
@@ -302,6 +445,39 @@ function onTapNextHand() {
 
 const replayActive = computed(() => state.byActionTimeline.length > 0);
 
+const boardHighlightSet = computed(() => {
+  if (!replayActive.value) return new Set<number>();
+  const e = state.byActionTimeline[state.replayStep];
+  return new Set(boardIndicesForDealBoardStep(e));
+});
+
+/** 小盲/大盲，如 50/100；来自 replayMeta.blindsOrStraddles 与各座位位次 */
+const blindsLevelText = computed(() => {
+  const blinds = state.replayMeta?.blindsOrStraddles;
+  if (!blinds?.length) return "";
+
+  const uniqPos = [
+    ...new Set(
+      blinds
+        .map((x) => Math.max(0, Math.round(Number(x) || 0)))
+        .filter((x) => x > 0),
+    ),
+  ].sort((a, b) => a - b);
+
+  const sbSeat = state.players.findIndex((p) => p.positionKey === "SB");
+  const bbSeat = state.players.findIndex((p) => p.positionKey === "BB");
+  const sbFromSeat = sbSeat >= 0 ? Math.round(blinds[sbSeat] ?? 0) : 0;
+  const bbFromSeat = bbSeat >= 0 ? Math.round(blinds[bbSeat] ?? 0) : 0;
+
+  if (sbFromSeat > 0 && bbFromSeat > 0) {
+    return `${sbFromSeat}/${bbFromSeat}`;
+  }
+  if (uniqPos.length >= 2) {
+    return `${uniqPos[0]}/${uniqPos[1]}`;
+  }
+  return "";
+});
+
 /** 回放未到最后一手动作时不展示 WINS，避免中途提前剧透 */
 const replayShowWinnerWinsTag = computed(() => {
   const tl = state.byActionTimeline;
@@ -313,6 +489,11 @@ function showWinsTag(p: PlayerState): boolean {
   if (!p.winner) return false;
   if (!replayActive.value) return true;
   return replayShowWinnerWinsTag.value;
+}
+
+/** 回放最后一动：WINS 标签高亮动效 */
+function winsTagCelebrate(p: PlayerState): boolean {
+  return showWinsTag(p) && replayShowWinnerWinsTag.value;
 }
 
 const serverByActionHasText = computed(() =>
@@ -361,16 +542,19 @@ function joinAnalysis(p: PlayerState): string {
     .join(" · ");
 }
 
-function positionIcon(k: SeatPositionKey): string {
-  const m: Record<SeatPositionKey, string> = {
-    SB: "⭕",
-    BB: "🎯",
-    UTG: "✈",
-    MP: "⚓",
-    CO: "💵",
-    BTN: "👑",
+function positionNameZh(p: PlayerState): string {
+  const fromKey: Record<SeatPositionKey, string> = {
+    SB: "小盲",
+    BB: "大盲",
+    UTG: "枪口",
+    MP: "中位",
+    CO: "关煞",
+    BTN: "庄位",
   };
-  return m[k] ?? "·";
+  if (p.positionKey && fromKey[p.positionKey]) {
+    return fromKey[p.positionKey];
+  }
+  return (p.positionLabel || "").replace(/[()]/g, "").trim() || "—";
 }
 </script>
 
@@ -382,19 +566,36 @@ $pot-yellow: #fbbf24;
 $dock-bg: rgba(15, 61, 38, 0.96);
 
 .page-root {
+  width: 100%;
+  max-width: 480px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
   height: 100%;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
   overflow: hidden;
   background-color: $felt;
+  /* #ifdef MP-WEIXIN */
+  min-height: 100vh;
+  /* #endif */
+}
+
+.page-root.page-root--rv {
+  max-width: 540px;
 }
 
 .page-scroll {
   flex: 1;
+  width: 100%;
+  box-sizing: border-box;
+  /* H5：与底部 dock 分栏；小程序高度由 scrollViewStyle 指定 */
+  /* #ifndef MP-WEIXIN */
   height: 0;
   min-height: 0;
-  box-sizing: border-box;
+  /* #endif */
 }
 
 .narration-block {
@@ -428,24 +629,20 @@ $dock-bg: rgba(15, 61, 38, 0.96);
 .nar-head-center-wrap {
   flex: 1;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 4rpx;
 }
 
-.nar-head-center {
-  flex: 1;
-  min-width: 0;
+.nar-head-inline {
+  white-space: normal;
+  word-break: break-word;
 }
 
 .nar-head-chips {
-  display: block;
-  font-size: 22rpx;
+  display: inline;
+  font-size: 28rpx;
   font-weight: 700;
   color: #fde047;
-  line-height: 1.35;
-  word-break: break-all;
+  line-height: inherit;
+  white-space: nowrap;
 }
 
 .page-inner {
@@ -492,7 +689,7 @@ $dock-bg: rgba(15, 61, 38, 0.96);
 
 .nar-head {
   display: block;
-  font-size: 24rpx;
+  font-size: 30rpx;
   font-weight: 700;
   color: #e2e8f0;
   line-height: 1.45;
@@ -505,7 +702,7 @@ $dock-bg: rgba(15, 61, 38, 0.96);
 
 .nar-body {
   display: block;
-  font-size: 22rpx;
+  font-size: 28rpx;
   color: #cbd5e1;
   line-height: 1.55;
   white-space: pre-wrap;
@@ -514,7 +711,7 @@ $dock-bg: rgba(15, 61, 38, 0.96);
 
 .nar-summary {
   display: block;
-  font-size: 24rpx;
+  font-size: 30rpx;
   color: #f8fafc;
   line-height: 1.55;
   margin-bottom: 10rpx;
@@ -522,28 +719,54 @@ $dock-bg: rgba(15, 61, 38, 0.96);
 
 .nar-action {
   display: block;
-  font-size: 22rpx;
+  font-size: 28rpx;
   color: #cbd5e1;
   line-height: 1.5;
   margin-bottom: 8rpx;
 }
 
 .nar-empty {
-  font-size: 22rpx;
+  font-size: 26rpx;
   color: #94a3b8;
+}
+
+.board-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.board-pot-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8rpx;
+  flex-shrink: 0;
+}
+
+.blinds-level {
+  font-size: 20rpx;
+  font-weight: 600;
+  color: rgba(226, 232, 240, 0.88);
+  letter-spacing: 0.04em;
+  padding-left: 2rpx;
 }
 
 .community-row {
   display: flex;
   flex-direction: row;
-  justify-content: center;
+  flex: 1;
+  min-width: 0;
+  justify-content: flex-end;
   align-items: center;
   flex-wrap: nowrap;
-  gap: clamp(10rpx, 2vw, 18rpx);
-  margin-bottom: 10rpx;
+  gap: 14rpx;
 }
 
 .pot-bar {
+  flex-shrink: 0;
   border: 2rpx solid $pot-yellow;
   border-radius: 12rpx;
   padding: 6rpx 14rpx;
@@ -551,6 +774,40 @@ $dock-bg: rgba(15, 61, 38, 0.96);
   align-items: center;
   justify-content: center;
   display: flex;
+  flex-direction: row;
+  gap: 10rpx;
+}
+
+.pot-chip-ico {
+  position: relative;
+  width: 40rpx;
+  height: 36rpx;
+  flex-shrink: 0;
+}
+
+.pot-chip-disc {
+  position: absolute;
+  width: 30rpx;
+  height: 30rpx;
+  border-radius: 50%;
+  border: 3rpx solid rgba(0, 0, 0, 0.28);
+  box-sizing: border-box;
+}
+
+.pot-chip-disc--back {
+  left: 0;
+  bottom: 0;
+  background: linear-gradient(160deg, #b45309 0%, #78350f 100%);
+  box-shadow: inset 0 2rpx 4rpx rgba(255, 255, 255, 0.2);
+}
+
+.pot-chip-disc--front {
+  right: 0;
+  top: 0;
+  background: linear-gradient(160deg, #fde047 0%, #d97706 55%, #b45309 100%);
+  box-shadow:
+    inset 0 2rpx 5rpx rgba(255, 255, 255, 0.45),
+    0 2rpx 4rpx rgba(0, 0, 0, 0.25);
 }
 
 .pot-text {
@@ -590,9 +847,11 @@ $dock-bg: rgba(15, 61, 38, 0.96);
 .player-card {
   background: rgba(0, 0, 0, 0.12);
   border-radius: 12rpx;
-  padding: 6rpx 8rpx;
-  margin-bottom: 6rpx;
+  padding: 14rpx 12rpx;
+  margin-bottom: 10rpx;
   border: 2rpx solid transparent;
+  min-height: 108rpx;
+  box-sizing: border-box;
 }
 
 .player-card.focus {
@@ -608,13 +867,18 @@ $dock-bg: rgba(15, 61, 38, 0.96);
   display: flex;
   flex-direction: row;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
+  min-height: 88rpx;
 }
 
 .player-left {
   flex: 1;
-  padding-right: 8rpx;
+  padding-right: 12rpx;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8rpx;
 }
 
 .player-head {
@@ -623,7 +887,7 @@ $dock-bg: rgba(15, 61, 38, 0.96);
   align-items: flex-start;
   flex-wrap: nowrap;
   gap: 6rpx;
-  margin-bottom: 2rpx;
+  margin-bottom: 0;
 }
 
 .player-cards-block {
@@ -684,6 +948,55 @@ $dock-bg: rgba(15, 61, 38, 0.96);
   border: 1rpx solid rgba(253, 224, 71, 0.55);
 }
 
+.action-wins-tag--celebrate {
+  animation: wins-tag-pop 0.55s ease-out, wins-tag-glow 1.4s ease-in-out 0.55s infinite;
+  transform-origin: center center;
+}
+
+@keyframes wins-tag-pop {
+  0% {
+    transform: scale(0.72);
+    opacity: 0.55;
+  }
+  65% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes wins-tag-glow {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 0 rgba(253, 224, 71, 0.35),
+      0 2rpx 6rpx rgba(0, 0, 0, 0.2);
+    border-color: rgba(253, 224, 71, 0.55);
+  }
+  50% {
+    box-shadow:
+      0 0 16rpx 4rpx rgba(253, 224, 71, 0.55),
+      0 0 28rpx 6rpx rgba(250, 204, 21, 0.28);
+    border-color: rgba(254, 240, 138, 0.95);
+  }
+}
+
+.action-wins-tag--celebrate .action-trail-label {
+  animation: wins-label-shine 1.4s ease-in-out 0.55s infinite;
+}
+
+@keyframes wins-label-shine {
+  0%,
+  100% {
+    color: #fff;
+  }
+  50% {
+    color: #fef08a;
+  }
+}
+
 .action-wins-tag .action-trail-label {
   font-weight: 800;
   letter-spacing: 0.06em;
@@ -694,25 +1007,66 @@ $dock-bg: rgba(15, 61, 38, 0.96);
   flex-direction: row;
   flex-wrap: nowrap;
   align-items: center;
-  gap: 4rpx;
+  gap: 8rpx;
   flex: 1;
   min-width: 0;
   margin-bottom: 0;
 }
 
-.pos-ico {
-  font-size: 18rpx;
+.pos-badge {
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40rpx;
+  height: 26rpx;
+  padding: 0 6rpx;
+  border-radius: 6rpx;
+  box-sizing: border-box;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1rpx solid rgba(255, 255, 255, 0.2);
 }
 
-.pos-lab {
-  font-size: 18rpx;
-  color: rgba(255, 255, 255, 0.85);
-  flex-shrink: 0;
+.pos-badge-txt {
+  font-size: 15rpx;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.95);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.pos-badge--SB {
+  background: rgba(148, 163, 184, 0.32);
+  border-color: rgba(203, 213, 225, 0.42);
+}
+
+.pos-badge--BB {
+  background: rgba(251, 191, 36, 0.22);
+  border-color: rgba(251, 191, 36, 0.48);
+}
+
+.pos-badge--UTG {
+  background: rgba(56, 189, 248, 0.2);
+  border-color: rgba(56, 189, 248, 0.45);
+}
+
+.pos-badge--MP {
+  background: rgba(99, 102, 241, 0.22);
+  border-color: rgba(129, 140, 248, 0.45);
+}
+
+.pos-badge--CO {
+  background: rgba(52, 211, 153, 0.2);
+  border-color: rgba(52, 211, 153, 0.45);
+}
+
+.pos-badge--BTN {
+  background: rgba(250, 204, 21, 0.22);
+  border-color: rgba(250, 204, 21, 0.5);
 }
 
 .p-name {
-  font-size: 22rpx;
+  font-size: 24rpx;
   font-weight: 700;
   color: #fff;
   flex: 1;
@@ -727,12 +1081,45 @@ $dock-bg: rgba(15, 61, 38, 0.96);
   flex-direction: row;
   align-items: center;
   flex-wrap: nowrap;
-  font-size: 18rpx;
+  font-size: 20rpx;
   color: rgba(255, 255, 255, 0.78);
-  line-height: 1.2;
+  line-height: 1.45;
 }
 
-.p-meta-bit {
+.p-meta-group {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6rpx;
+  flex-shrink: 0;
+}
+
+.p-chip-ico {
+  width: 22rpx;
+  height: 22rpx;
+  border-radius: 50%;
+  border: 2rpx solid rgba(0, 0, 0, 0.3);
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+/** 筹码量：青绿 */
+.p-chip-ico--stack {
+  background: linear-gradient(145deg, #6ee7b7 0%, #059669 55%, #047857 100%);
+  box-shadow:
+    inset 0 1rpx 3rpx rgba(255, 255, 255, 0.4),
+    0 1rpx 2rpx rgba(0, 0, 0, 0.2);
+}
+
+/** 当前注：玫红 */
+.p-chip-ico--bet {
+  background: linear-gradient(145deg, #fda4af 0%, #e11d48 55%, #9f1239 100%);
+  box-shadow:
+    inset 0 1rpx 3rpx rgba(255, 255, 255, 0.35),
+    0 1rpx 2rpx rgba(0, 0, 0, 0.2);
+}
+
+.p-meta-val {
   flex-shrink: 0;
 }
 
@@ -767,13 +1154,13 @@ $dock-bg: rgba(15, 61, 38, 0.96);
 .hole-row {
   display: flex;
   flex-direction: row;
-  gap: 5rpx;
+  gap: 14rpx;
   flex-shrink: 0;
 }
 
 .analysis-box {
-  margin-top: 4rpx;
-  padding: 4rpx 6rpx;
+  margin-top: 10rpx;
+  padding: 8rpx 10rpx;
   border-radius: 6rpx;
   background: rgba(30, 41, 59, 0.55);
   overflow: hidden;
@@ -791,6 +1178,7 @@ $dock-bg: rgba(15, 61, 38, 0.96);
 
 .dock {
   flex-shrink: 0;
+  position: relative;
   background: $dock-bg;
   border-top: 1rpx solid rgba(255, 255, 255, 0.12);
   padding: 16rpx 24rpx 0;
@@ -799,10 +1187,27 @@ $dock-bg: rgba(15, 61, 38, 0.96);
 }
 
 .replay-dock {
+  position: relative;
+  z-index: 1;
   margin-bottom: 14rpx;
 }
 
+.icp-record {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(6rpx + 3px);
+  z-index: 0;
+  text-align: center;
+  font-size: 19rpx;
+  color: #94a3b8;
+  line-height: 1;
+  text-decoration: underline;
+}
+
 .replay-row {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -830,6 +1235,8 @@ $dock-bg: rgba(15, 61, 38, 0.96);
   display: flex;
   flex-direction: row;
   align-items: center;
+  position: relative;
+  z-index: 1;
 }
 
 .replay-controls {
@@ -870,6 +1277,27 @@ $dock-bg: rgba(15, 61, 38, 0.96);
   font-weight: 600;
   color: #e2e8f0;
   font-variant-numeric: tabular-nums;
+}
+
+.voice-toggle {
+  flex-shrink: 0;
+  width: 56rpx;
+  height: 56rpx;
+  border-radius: 14rpx;
+  background: #334155;
+  align-items: center;
+  justify-content: center;
+  display: flex;
+}
+
+.voice-toggle--off {
+  background: #1e293b;
+  opacity: 0.72;
+}
+
+.voice-glyph {
+  font-size: 28rpx;
+  line-height: 1;
 }
 
 .dock-safe {

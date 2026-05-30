@@ -36,6 +36,21 @@ function isBlindPostAction(action: string): boolean {
   );
 }
 
+/** raise / bet / 3bet / 4bet …（CommentaryLite 翻前再加注用 Nbet 动作名） */
+function isWagerAction(action: string): boolean {
+  const a = (action || "").toLowerCase();
+  if (a === "raise" || a === "bet") return true;
+  return /^\d+bet$/.test(a);
+}
+
+function actionLabelZh(action: string): string {
+  const a = (action || "").toLowerCase();
+  if (ACTION_ZH[a]) return ACTION_ZH[a];
+  const m = /^(\d+)bet$/.exec(a);
+  if (m) return `${m[1]}bet`;
+  return action ? String(action) : "";
+}
+
 function normStreet(s: string): Street {
   const x = (s || "").toLowerCase();
   if (x === "flop" || x === "turn" || x === "river" || x === "preflop") {
@@ -138,7 +153,7 @@ function applyChipsAction(
     streetBets[si] = streetTotal;
   };
 
-  if (action === "raise" || action === "bet") {
+  if (isWagerAction(action)) {
     if (chips != null) {
       const delta = chips - streetBets[si];
       if (delta > 0) {
@@ -281,8 +296,7 @@ function recordPlayerActionTrail(
   if (si == null || si < 0 || si >= seatCount) return;
 
   const chipsLine = formatActionChipsLine(e.chips, potAfter, bbUnit);
-  const labelZh =
-    ACTION_ZH[action] || (e.action ? String(e.action) : "");
+  const labelZh = actionLabelZh(action);
   if (!labelZh) return;
 
   const st = normStreet(e.street);
@@ -308,13 +322,31 @@ function formatStepHeadlineChips(
   if (!e) return "";
   const action = (e.action || "").toLowerCase();
   if (
-    !["raise", "bet", "call", "post", "straddle", "sb", "bb", "small_blind", "big_blind", "ante"].includes(
+    !isWagerAction(action) &&
+    !["call", "post", "straddle", "sb", "bb", "small_blind", "big_blind", "ante"].includes(
       action,
     )
   ) {
     return "";
   }
   return formatActionChipsLine(e.chips, potAfter, bbUnit) ?? "";
+}
+
+/** 当前 deal_board 事件推断本次发出的公牌槽位（0–4） */
+export function boardIndicesForDealBoardStep(
+  e: ByActionEvent | undefined,
+): number[] {
+  if (!e || (e.action || "").toLowerCase() !== "deal_board") return [];
+  const st = normStreet(e.street);
+  if (st === "flop") return [0, 1, 2];
+  if (st === "turn") return [3];
+  if (st === "river") return [4];
+  if (e.cards) {
+    const n = unicodeCardsToCodes(e.cards).length;
+    if (n >= 3) return [0, 1, 2];
+    if (n === 1) return [3];
+  }
+  return [];
 }
 
 export interface ReplaySnapshot {
@@ -338,6 +370,8 @@ export interface ReplaySnapshot {
   stepHeadlineChipsLine: string;
   stepSeatName: string;
   stepDetailText: string;
+  /** 当前步为 deal_board 时，本次新发的公牌索引 */
+  boardHighlightIndices: number[];
 }
 
 /** 根据 timeline 前 step+1 条事件推算桌面状态（step 从 0 起） */
@@ -436,19 +470,29 @@ export function computeReplaySnapshot(
       ? last.seat_index
       : null;
   const stepActionKey = last?.action ?? "";
-  const stepActionZh =
-    ACTION_ZH[(last?.action ?? "").toLowerCase()] ?? last?.action ?? "";
+  const stepActionZh = actionLabelZh((last?.action ?? "").toLowerCase());
   const stepSeatName = last?.seat_name ?? "";
   const stepDetailText = last?.text ?? "";
   const stepHeadlineChips = formatStepHeadlineChips(last, potRef.v, bbUnit);
+  const boardHighlightIndices = boardIndicesForDealBoardStep(last);
 
   const atEnd = maxStep >= timeline.length - 1 && timeline.length > 0;
-  const stacks =
-    atEnd && meta?.finishingStacks?.length === seatCount
-      ? [...meta.finishingStacks]
-      : meta?.startingStacks?.length === seatCount
-        ? [...meta.startingStacks]
-        : Array.from({ length: seatCount }, () => 10000);
+  const stacks = (() => {
+    if (meta?.startingStacks?.length === seatCount) {
+      if (atEnd && meta.finishingStacks?.length === seatCount) {
+        return [...meta.finishingStacks];
+      }
+      return meta.startingStacks.map((s, i) =>
+        Math.max(0, Math.round(s - (handBets[i] ?? 0))),
+      );
+    }
+    if (atEnd && meta?.finishingStacks?.length === seatCount) {
+      return [...meta.finishingStacks];
+    }
+    return Array.from({ length: seatCount }, (_, i) =>
+      Math.max(0, Math.round(10000 - (handBets[i] ?? 0))),
+    );
+  })();
 
   return {
     board,
@@ -466,5 +510,6 @@ export function computeReplaySnapshot(
     stepHeadlineChipsLine: stepHeadlineChips,
     stepSeatName,
     stepDetailText,
+    boardHighlightIndices,
   };
 }

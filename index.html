@@ -2,14 +2,36 @@
 <html>
   <head>
     <meta charset="UTF-8" />
+    <style>
+      /* H5 / PC：主栏 max-width 居中时两侧与牌桌同色 */
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        background-color: #0a2e1e;
+      }
+      #app {
+        min-height: 100%;
+      }
+    </style>
     <script>
       var coverSupport = 'CSS' in window && typeof CSS.supports === 'function' && (CSS.supports('top: env(a)') ||
         CSS.supports('top: constant(a)'))
+      var viewportFit = coverSupport ? ', viewport-fit=cover' : ''
+      /** m=rv：首屏前就固定 540px，否则 rpx 已按 device-width 换算后再改 meta 无效 */
+      var rvViewportWidth = 540
+      var search = window.location.search || ''
+      var hash = window.location.hash || ''
+      var hashQ = hash.indexOf('?')
+      if (hashQ >= 0) search = hash.slice(hashQ)
+      var mMatch = search.match(/[?&]m=([^&]*)/)
+      var isRv = mMatch && decodeURIComponent(mMatch[1]).trim().toLowerCase() === 'rv'
+      var viewportWidth = isRv ? String(rvViewportWidth) : 'device-width'
       document.write(
-        '<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0' +
-        (coverSupport ? ', viewport-fit=cover' : '') + '" />')
+        '<meta name="viewport" content="width=' + viewportWidth + ', user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0' +
+        viewportFit + '" />')
     </script>
-    <title>德扑秀</title>
+    <title>博弈技术学习</title>
     <!--preload-links-->
     <!--app-context-->
   </head>

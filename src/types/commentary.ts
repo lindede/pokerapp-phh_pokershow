@@ -65,6 +65,10 @@ export interface PlayerPayload {
 
 export interface HandCommentaryPayload {
   datasetKey?: string;
+  /**
+   * 本局 id（CommentaryLite 根级 meta.i）。
+   * i=-1 时 meta.i 为当前局；明确 i 请求时 meta.i 与请求 i 一致；语音 list/data 仅用 meta.i。
+   */
   handIndex?: number | string;
   pot?: number;
   /** 长度 5，null 表示未发出或未知 */

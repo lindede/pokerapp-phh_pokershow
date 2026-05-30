@@ -9,6 +9,68 @@ import type {
 } from "@/types/commentary";
 import { computeReplaySnapshot } from "@/utils/replayByAction";
 
+/** 兼容 { data: { commentary, ... }, meta } 等包一层；并把外层 meta 合并进内层 */
+function unwrapApiData(data: unknown): Record<string, unknown> | null {
+  if (data == null || typeof data !== "object") return null;
+  const d = data as Record<string, unknown>;
+  const inner = d.data ?? d.Data ?? d.result;
+  if (inner != null && typeof inner === "object") {
+    const n = inner as Record<string, unknown>;
+    const hasStructured =
+      (n.commentary != null && typeof n.commentary === "object") ||
+      Array.isArray(n.facts) ||
+      (Array.isArray(n.players) && n.players.length > 0);
+    if (hasStructured) {
+      const out: Record<string, unknown> = { ...n };
+      if (out.meta == null) {
+        if (d.meta != null) out.meta = d.meta;
+        else if (d.Meta != null) out.meta = d.Meta;
+      }
+      return out;
+    }
+  }
+  return d;
+}
+
+function parseMaybeJsonObject(raw: unknown): Record<string, unknown> | null {
+  if (raw == null) return null;
+  if (typeof raw === "object" && !Array.isArray(raw)) {
+    return raw as Record<string, unknown>;
+  }
+  if (typeof raw === "string") {
+    const t = raw.trim();
+    if (!t) return null;
+    try {
+      const v = JSON.parse(t) as unknown;
+      if (typeof v === "object" && v != null && !Array.isArray(v)) {
+        return v as Record<string, unknown>;
+      }
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+/** 根对象、data 内或 commentary 内的 meta（含 JSON 字符串） */
+function extractMetaObject(root: Record<string, unknown>): Record<string, unknown> | null {
+  const candidates: unknown[] = [root.meta, root.Meta];
+  const inner = root.data ?? root.Data;
+  if (inner != null && typeof inner === "object") {
+    const n = inner as Record<string, unknown>;
+    candidates.push(n.meta, n.Meta);
+  }
+  if (root.commentary != null && typeof root.commentary === "object") {
+    const c = root.commentary as Record<string, unknown>;
+    candidates.push(c.meta, c.Meta);
+  }
+  for (const c of candidates) {
+    const m = parseMaybeJsonObject(c);
+    if (m) return m;
+  }
+  return null;
+}
+
 const POS_ABBR: Record<string, SeatPositionKey> = {
   SB: "SB",
   BB: "BB",
@@ -31,7 +93,7 @@ const POS_LABEL_ZH: Record<SeatPositionKey, string> = {
   BB: "(大盲)",
   UTG: "(枪口)",
   MP: "(中位)",
-  CO: "(关位)",
+  CO: "(关煞)",
   BTN: "(庄位)",
 };
 
@@ -391,31 +453,55 @@ function parseCommentary2Shape(d: Record<string, unknown>): HandCommentaryPayloa
   };
 }
 
+/** 根级 meta.k / meta.i：数据集 key 与本局 id（语音 list/data 使用 meta.i） */
+function mergeRootMeta(
+  root: Record<string, unknown>,
+  payload: HandCommentaryPayload,
+): HandCommentaryPayload {
+  const m = extractMetaObject(root);
+  if (!m) return payload;
+
+  const rawI = m.i ?? m.I ?? m.hand_index ?? m.handIndex ?? m.index;
+  if (rawI !== undefined && rawI !== null) {
+    if (typeof rawI === "number" && Number.isFinite(rawI)) {
+      payload.handIndex = rawI;
+    } else if (typeof rawI === "string" && rawI.trim() !== "") {
+      payload.handIndex = rawI.trim();
+    }
+  }
+  const rawK = m.k ?? m.K ?? m.dataset ?? m.datasetKey;
+  if (typeof rawK === "string" && rawK.trim() !== "") {
+    payload.datasetKey = rawK.trim();
+  }
+  return payload;
+}
+
 /**
- * 将 GET /v1/commentary2 返回体转为界面用的 HandCommentaryPayload。
+ * 将 CommentaryLite / commentary2 等返回体转为界面用的 HandCommentaryPayload。
  * 若已是扁平结构（含 board 数组）则原样透传。
  */
 export function adaptCommentaryResponse(data: unknown): HandCommentaryPayload | null {
-  if (data == null || typeof data !== "object") return null;
-  const d = data as Record<string, unknown>;
+  const d = unwrapApiData(data);
+  if (d == null) return null;
 
   if (
     !d.commentary &&
     (Array.isArray(d.board) || Array.isArray(d.players))
   ) {
-    return d as HandCommentaryPayload;
+    return mergeRootMeta(d, { ...(d as unknown as HandCommentaryPayload) });
   }
 
   if (d.commentary != null && typeof d.commentary === "object") {
     const comm = d.commentary as Record<string, unknown>;
     if (isStructuredCommentary(comm)) {
       const structured = parseStructuredCommentary(d, comm);
-      if (structured) return structured;
+      if (structured) return mergeRootMeta(d, structured);
     }
   }
 
   if (d.commentary != null && Array.isArray(d.facts)) {
-    return parseCommentary2Shape(d);
+    const shaped = parseCommentary2Shape(d);
+    if (shaped) return mergeRootMeta(d, shaped);
   }
 
   return null;

@@ -60,7 +60,7 @@ export const DEFAULT_PLAYERS: PlayerState[] = [
   {
     id: "p4",
     positionKey: "CO",
-    positionLabel: "(关位)",
+    positionLabel: "(关煞)",
     name: "玩家5",
     stack: 10000,
     bet: 0,
@@ -89,8 +89,8 @@ export const DEFAULT_PLAYERS: PlayerState[] = [
 
 /** 对齐界面6：Flop、底池、部分玩家解说 */
 export const SAMPLE_PAYLOAD: HandCommentaryPayload = {
-  datasetKey: "v1_NLH_BB100_NoAnte_SixMax_part00000",
-  handIndex: 2,
+  datasetKey: "all",
+  handIndex: -1,
   pot: 150,
   board: ["4d", "6s", "Th", null, null],
   street: "flop",
