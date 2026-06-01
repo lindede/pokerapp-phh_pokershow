@@ -4,6 +4,7 @@ export interface LaunchQueryParams {
   k?: string;
   i?: string;
   m?: string;
+  ls?: string;
 }
 
 function mergeSearchInto(target: URLSearchParams, search: string) {
@@ -32,7 +33,7 @@ export function parseLaunchQuery(): LaunchQueryParams {
     return v != null && v !== "" ? v : undefined;
   };
 
-  return { k: pick("k"), i: pick("i"), m: pick("m") };
+  return { k: pick("k"), i: pick("i"), m: pick("m"), ls: pick("ls") };
 }
 
 /** 小程序 onLoad(options) 启动参数 */
@@ -44,7 +45,7 @@ export function parseMpLaunchOptions(
     const v = options[key];
     return v != null && v !== "" ? String(v).trim() : undefined;
   };
-  return { k: pick("k"), i: pick("i"), m: pick("m") };
+  return { k: pick("k"), i: pick("i"), m: pick("m"), ls: pick("ls") };
 }
 
 /** 同时有 k、i 时首屏 CommentaryLite 用 URL 参数，否则默认 all / -1 */
@@ -78,4 +79,39 @@ export function applyReviewLaunchViewport(): void {
     "content",
     `width=${REVIEW_VIEWPORT_WIDTH}, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, viewport-fit=cover`,
   );
+}
+
+const LANDSCAPE_VIEWPORT_WIDTH = 1280;
+const LANDSCAPE_VIEWPORT_HEIGHT = 720;
+
+/** ls=1：H5 宽屏 / 录屏嵌入，固定 16:9（1280×720） */
+export function isLandscapeLaunchMode(q: LaunchQueryParams): boolean {
+  return q.ls?.trim() === "1";
+}
+
+export function getLandscapeViewportWidth(): number {
+  return LANDSCAPE_VIEWPORT_WIDTH;
+}
+
+export function getLandscapeViewportHeight(): number {
+  return LANDSCAPE_VIEWPORT_HEIGHT;
+}
+
+/** ls=1：固定 viewport（index.html 已抢先设置；此处再同步以防热更新） */
+export function applyLandscapeLaunchViewport(): void {
+  if (typeof document === "undefined") return;
+  let meta = document.querySelector('meta[name="viewport"]');
+  if (!meta) {
+    meta = document.createElement("meta");
+    meta.setAttribute("name", "viewport");
+    document.head.appendChild(meta);
+  }
+  meta.setAttribute(
+    "content",
+    `width=${LANDSCAPE_VIEWPORT_WIDTH}, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, viewport-fit=cover`,
+  );
+  document.documentElement.classList.add("launch-ls");
+  if (document.body) {
+    document.body.style.backgroundColor = "#0a0a0a";
+  }
 }

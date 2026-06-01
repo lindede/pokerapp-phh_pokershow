@@ -13,20 +13,48 @@
       #app {
         min-height: 100%;
       }
+      html.launch-ls,
+      html.launch-ls body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100%;
+        background-color: #0a0a0a;
+      }
+      html.launch-ls .uni-page-head,
+      html.launch-ls uni-page-head {
+        background-color: #0a0a0a !important;
+      }
+      html.launch-ls #app {
+        width: 100%;
+        display: flex;
+        justify-content: center;
+        background-color: #0a0a0a;
+      }
+      html.launch-ls uni-page-body,
+      html.launch-ls .uni-page-body,
+      html.launch-ls uni-page,
+      html.launch-ls .uni-page-wrapper {
+        background-color: #0a0a0a !important;
+      }
     </style>
     <script>
       var coverSupport = 'CSS' in window && typeof CSS.supports === 'function' && (CSS.supports('top: env(a)') ||
         CSS.supports('top: constant(a)'))
       var viewportFit = coverSupport ? ', viewport-fit=cover' : ''
-      /** m=rv：首屏前就固定 540px，否则 rpx 已按 device-width 换算后再改 meta 无效 */
+      /** m=rv：540px 竖屏录屏；ls=1：1280px 宽屏 16:9，优先于 rv */
       var rvViewportWidth = 540
+      var lsViewportWidth = 1280
       var search = window.location.search || ''
       var hash = window.location.hash || ''
       var hashQ = hash.indexOf('?')
       if (hashQ >= 0) search = hash.slice(hashQ)
       var mMatch = search.match(/[?&]m=([^&]*)/)
+      var lsMatch = search.match(/[?&]ls=([^&]*)/)
       var isRv = mMatch && decodeURIComponent(mMatch[1]).trim().toLowerCase() === 'rv'
-      var viewportWidth = isRv ? String(rvViewportWidth) : 'device-width'
+      var isLs = lsMatch && decodeURIComponent(lsMatch[1]).trim() === '1'
+      var viewportWidth = isLs ? String(lsViewportWidth) : (isRv ? String(rvViewportWidth) : 'device-width')
+      if (isLs) document.documentElement.classList.add('launch-ls')
       document.write(
         '<meta name="viewport" content="width=' + viewportWidth + ', user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0' +
         viewportFit + '" />')

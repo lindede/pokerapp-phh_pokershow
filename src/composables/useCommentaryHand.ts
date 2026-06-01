@@ -1,4 +1,4 @@
-import { onUnmounted, reactive } from "vue";
+import { computed, onUnmounted, reactive } from "vue";
 import type {
   ByActionEvent,
   CommentaryActionItem,
@@ -8,7 +8,12 @@ import type {
   PlayerState,
   Street,
 } from "@/types/commentary";
+import type { EquityByActionEvent } from "@/types/commentaryEquity";
 import { adaptCommentaryResponse } from "@/utils/commentary2Adapter";
+import {
+  adaptEquityResponse,
+  buildEquityStepView,
+} from "@/utils/commentaryEquityAdapter";
 import {
   computeReplaySnapshot,
 } from "@/utils/replayByAction";
@@ -172,6 +177,18 @@ function createCommentaryVoicePlayer(): CommentaryVoicePlayer {
     if (dur > 0) onDurationReviseCb?.(dur);
   }
 
+  function tryStartPlayback(attemptId: number) {
+    if (attemptId !== playAttemptId || playStarted || !ctx) return;
+    try {
+      const ret = ctx.play() as void | Promise<void>;
+      if (ret != null && typeof (ret as Promise<void>).catch === "function") {
+        (ret as Promise<void>).catch(() => fireError(attemptId));
+      }
+    } catch {
+      fireError(attemptId);
+    }
+  }
+
   function bindCtxHandlers(audio: UniApp.InnerAudioContext) {
     audio.onPlay(() => {
       playStarted = true;
@@ -184,12 +201,7 @@ function createCommentaryVoicePlayer(): CommentaryVoicePlayer {
         notifyDurationIfReady(audio);
         return;
       }
-      clearStartWatch();
-      const canplayAttemptId = playAttemptId;
-      startWatchId = setTimeout(() => {
-        if (playStarted || playAttemptId !== canplayAttemptId) return;
-        fireError(canplayAttemptId);
-      }, VOICE_START_TIMEOUT_MS);
+      tryStartPlayback(playAttemptId);
     });
     audio.onEnded(() => {
       clearStartWatch();
@@ -229,17 +241,14 @@ function createCommentaryVoicePlayer(): CommentaryVoicePlayer {
       onErrorCb = opts?.onError ?? null;
       onStartCb = opts?.onStart ?? null;
       onDurationReviseCb = opts?.onDurationRevise ?? null;
-      disposeCtx();
       const audio = ensureCtx();
-      audio.src = url;
       try {
-        const ret = audio.play() as void | Promise<void>;
-        if (ret != null && typeof (ret as Promise<void>).catch === "function") {
-          (ret as Promise<void>).catch(() => fireError(attemptId));
-        }
-      } catch (_err) {
-        fireError(attemptId);
+        audio.stop();
+      } catch {
+        /* ignore */
       }
+      audio.src = url;
+      tryStartPlayback(attemptId);
       startWatchId = setTimeout(() => {
         if (attemptId !== playAttemptId || playStarted) return;
         fireError(attemptId);
@@ -270,16 +279,19 @@ function createCommentaryVoicePlayer(): CommentaryVoicePlayer {
 let COMMENTARY_API_URL: string;
 let VOICE_LIST_API_URL: string;
 let VOICE_DATA_API_URL: string;
+let EQUITY_API_URL: string;
 // #ifdef H5
 /** H5 开发 / 生产均走同源 /v1、/v2（开发靠 Vite 代理，生产靠 Nginx 反代） */
 COMMENTARY_API_URL = "/v1/CommentaryLite";
 VOICE_LIST_API_URL = "/v2/Commentary/voice/list";
 VOICE_DATA_API_URL = "/v2/Commentary/voice/data";
+EQUITY_API_URL = "/v2/Commentary/additional/equity";
 // #endif
 // #ifndef H5
 COMMENTARY_API_URL = "https://www.pokershow.top/v1/CommentaryLite";
 VOICE_LIST_API_URL = "https://www.pokershow.top/v2/Commentary/voice/list";
 VOICE_DATA_API_URL = "https://www.pokershow.top/v2/Commentary/voice/data";
+EQUITY_API_URL = "https://www.pokershow.top/v2/Commentary/additional/equity";
 // #endif
 
 const DEV_COMMENTARY_DATASET_KEY = "all";
@@ -367,6 +379,7 @@ function mergePlayers(target: PlayerState[], incoming: PlayerPayload[]) {
 
 export function useCommentaryHand() {
   let serverSnapshot: CommentaryUISnapshot | null = null;
+  let equityRequestId = 0;
   /** cumulativeMs.length === timeline.length + 1 */
   let replayCumulativeMs: number[] = [0];
   let rafId = 0;
@@ -697,7 +710,64 @@ export function useCommentaryHand() {
     replayPlaying: false,
     /** 解说语音：open 时随 action 步进播放 */
     voiceOpen: true,
+    equityHdNames: [] as string[],
+    equityByAction: [] as EquityByActionEvent[],
   });
+
+  const equityStepView = computed(() => {
+    let eventIndex = 0;
+    let prevEventIndex: number | null = null;
+    const tl = state.byActionTimeline;
+    if (tl.length > 0) {
+      const ev = tl[state.replayStep];
+      if (ev?.event_index != null) eventIndex = ev.event_index;
+      if (state.replayStep > 0) {
+        const prev = tl[state.replayStep - 1];
+        if (prev?.event_index != null) prevEventIndex = prev.event_index;
+      }
+    } else if (state.equityByAction.length > 0) {
+      eventIndex =
+        state.equityByAction[state.equityByAction.length - 1].event_index;
+    }
+    return buildEquityStepView(
+      state.equityByAction,
+      state.equityHdNames,
+      state.players.length,
+      eventIndex,
+      prevEventIndex,
+    );
+  });
+
+  function loadEquityForHand(datasetKey: string, handIndex: string) {
+    if (!EQUITY_API_URL?.trim()) return;
+    const k = datasetKey.trim();
+    const i = handIndex.trim();
+    if (!k || !i) return;
+    const reqId = ++equityRequestId;
+    uni.request({
+      url: `${EQUITY_API_URL.trim()}?k=${encodeURIComponent(k)}&i=${encodeURIComponent(i)}&_t=${Date.now()}`,
+      method: "GET",
+      timeout: 60000,
+      success: (res) => {
+        if (reqId !== equityRequestId) return;
+        if (res.statusCode >= 200 && res.statusCode < 300 && res.data != null) {
+          const parsed = adaptEquityResponse(res.data);
+          if (parsed) {
+            state.equityHdNames = parsed.hdNames;
+            state.equityByAction = parsed.byAction;
+          }
+        } else {
+          state.equityHdNames = [];
+          state.equityByAction = [];
+        }
+      },
+      fail: () => {
+        if (reqId !== equityRequestId) return;
+        state.equityHdNames = [];
+        state.equityByAction = [];
+      },
+    });
+  }
 
   function pauseReplayInternal() {
     state.replayPlaying = false;
@@ -750,11 +820,15 @@ export function useCommentaryHand() {
           playVoiceForCurrentStep();
         }
       })
-      .catch(() => {
+      .catch((err) => {
         if (reqId !== voiceListRequestId) return;
         voiceIndexMap = new Map();
         voiceListDatasetKey = null;
         voiceListHandIndex = null;
+        console.warn(
+          "[h5voice][voice-list-fail]",
+          JSON.stringify({ k: capturedK, i: capturedI, err: String(err) }),
+        );
       });
   }
 
@@ -1181,6 +1255,8 @@ export function useCommentaryHand() {
     handNavHistory = [];
     pendingBackNavigation = false;
     backNavRestoreOnFail = null;
+    state.equityHdNames = [];
+    state.equityByAction = [];
     applyPayload(SAMPLE_PAYLOAD, { skipVoice: true, replayAutoplay: false });
     if (!opts?.silent) {
       uni.showToast({ title: "已载入示例", icon: "none" });
@@ -1258,6 +1334,12 @@ export function useCommentaryHand() {
             }
           }
           applyPayload(payload, { replayAutoplay: opts?.replayAutoplay });
+          loadEquityForHand(
+            payload.datasetKey ?? state.datasetKey,
+            payload.handIndex != null
+              ? String(payload.handIndex)
+              : requestHandIndex,
+          );
           if (!opts?.silentToast) {
             uni.showToast({ title: "已更新", icon: "none" });
           }
@@ -1425,6 +1507,7 @@ export function useCommentaryHand() {
 
   return {
     state,
+    equityStepView,
     /** 供 WebSocket / 轮询拿到 JSON 后直接刷新界面 */
     applyPayload,
     loadSample,

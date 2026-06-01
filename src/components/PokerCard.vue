@@ -18,7 +18,7 @@ import { parseCardCode } from "@/utils/cards";
 const props = withDefaults(
   defineProps<{
     code?: string | null;
-    size?: "lg" | "sm";
+    size?: "lg" | "sm" | "xl";
     /** 发公牌等场景高亮 */
     highlight?: boolean;
   }>(),
@@ -61,6 +61,22 @@ const parsed = computed(() => parseCardCode(props.code ?? null));
   flex: none;
   border-radius: 8rpx;
   box-shadow: 0 2rpx 4rpx rgba(0, 0, 0, 0.1);
+}
+
+/* 宽屏玩家底牌：比 lg 更大 */
+.pc.xl {
+  flex: none;
+  min-width: 80rpx;
+  max-width: 104rpx;
+  width: 96rpx;
+  height: 134rpx;
+  border-radius: 12rpx;
+  align-self: center;
+  /* #ifdef H5 */
+  width: 96rpx;
+  height: 134rpx;
+  aspect-ratio: 5 / 7;
+  /* #endif */
 }
 
 .pc-inner {
@@ -136,5 +152,21 @@ const parsed = computed(() => parseCardCode(props.code ?? null));
 
 .pc.lg .pc-q {
   font-size: 30rpx;
+}
+
+.pc.xl .pc-inner {
+  gap: 4rpx;
+}
+
+.pc.xl .pc-rank {
+  font-size: 30rpx;
+}
+
+.pc.xl .pc-suit {
+  font-size: 36rpx;
+}
+
+.pc.xl .pc-q {
+  font-size: 38rpx;
 }
 </style>
