@@ -134,6 +134,25 @@ export function formatEquityPct(v: number | undefined): string {
   return `${Math.round(v * 100)}%`;
 }
 
+/** 权益展示：数字与 % 分离，便于分别设字号 */
+export function splitPctDisplay(display: string | undefined): {
+  num: string;
+  suffix: string;
+} {
+  const s = display ?? "--";
+  if (s === "--" || !s.endsWith("%")) return { num: s, suffix: "" };
+  return { num: s.slice(0, -1), suffix: "%" };
+}
+
+export function splitPotOddsDisplay(display: string | undefined): {
+  num: string;
+  suffix: string;
+} {
+  const s = display ?? "--";
+  if (s === "--" || !s.endsWith(":1")) return { num: s, suffix: "" };
+  return { num: s.slice(0, -2), suffix: ":1" };
+}
+
 export function formatPotOdd(v: number | undefined): string {
   if (v == null || v < 0 || !Number.isFinite(v)) return "--";
   return `${(Math.round(v * 10) / 10).toFixed(1)}:1`;
@@ -274,14 +293,19 @@ export function buildEquityStepView(
       ? formatEquityPct(prevResolved.average_equity_list?.[seat])
       : "--";
 
+    const potOdds =
+      actingSeat === seat && details.pot_odd != null
+        ? formatPotOdd(details.pot_odd)
+        : "--";
+
     rows.push({
       seatIndex: seat,
       rawEquity,
       averageEquity,
-      potOdds:
-        actingSeat === seat && details.pot_odd != null
-          ? formatPotOdd(details.pot_odd)
-          : "--",
+      potOdds,
+      rawEquityParts: splitPctDisplay(rawEquity),
+      averageEquityParts: splitPctDisplay(averageEquity),
+      potOddsParts: splitPotOddsDisplay(potOdds),
       rawEquityTrend: trendFromDisplay(rawEquity, prevRawEquity),
       averageEquityTrend: trendFromDisplay(averageEquity, prevAverageEquity),
     });

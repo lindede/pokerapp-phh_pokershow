@@ -3,7 +3,7 @@
     class="pc"
     :class="[size, { back: !parsed, red: parsed?.red, highlight }]"
   >
-    <view v-if="parsed" class="pc-inner">
+    <view v-if="parsed" class="pc-face">
       <text class="pc-rank">{{ parsed.rank }}</text>
       <text class="pc-suit">{{ parsed.suitChar }}</text>
     </view>
@@ -30,6 +30,7 @@ const parsed = computed(() => parseCardCode(props.code ?? null));
 
 <style lang="scss" scoped>
 .pc {
+  position: relative;
   background: rgba(255, 255, 255, 0.96);
   border-radius: 12rpx;
   display: flex;
@@ -37,6 +38,7 @@ const parsed = computed(() => parseCardCode(props.code ?? null));
   justify-content: center;
   box-shadow: 0 4rpx 8rpx rgba(0, 0, 0, 0.12);
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 /* 公牌：5:7；小程序对 aspect-ratio 支持不稳定，用固定高宽 */
@@ -63,34 +65,36 @@ const parsed = computed(() => parseCardCode(props.code ?? null));
   box-shadow: 0 2rpx 4rpx rgba(0, 0, 0, 0.1);
 }
 
-/* 宽屏玩家底牌：比 lg 更大 */
+/* 宽屏玩家底牌 / 公牌 */
 .pc.xl {
   flex: none;
-  min-width: 80rpx;
-  max-width: 104rpx;
-  width: 96rpx;
-  height: 134rpx;
+  min-width: 96rpx;
+  max-width: 124rpx;
+  width: 120rpx;
+  height: 168rpx;
   border-radius: 12rpx;
   align-self: center;
   /* #ifdef H5 */
-  width: 96rpx;
-  height: 134rpx;
+  width: 120rpx;
+  height: 168rpx;
   aspect-ratio: 5 / 7;
   /* #endif */
 }
 
-.pc-inner {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4rpx;
+.pc-face {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
 }
 
 .pc-rank {
-  font-size: 28rpx;
+  position: absolute;
+  top: 5rpx;
+  left: 5rpx;
+  font-size: 48rpx;
   font-weight: 700;
   color: #0f172a;
+  line-height: 1;
 }
 
 .pc.red .pc-rank,
@@ -99,7 +103,10 @@ const parsed = computed(() => parseCardCode(props.code ?? null));
 }
 
 .pc-suit {
-  font-size: 34rpx;
+  position: absolute;
+  bottom: 5rpx;
+  right: 5rpx;
+  font-size: 36rpx;
   line-height: 1;
   color: #0f172a;
 }
@@ -122,51 +129,51 @@ const parsed = computed(() => parseCardCode(props.code ?? null));
   color: #64748b;
 }
 
-.pc.sm .pc-inner {
-  gap: 0;
-}
-
 .pc.sm .pc-rank {
-  font-size: 16rpx;
+  top: 3rpx;
+  left: 3rpx;
+  font-size: 30rpx;
 }
 
 .pc.sm .pc-suit {
-  font-size: 18rpx;
+  bottom: 2rpx;
+  right: 2rpx;
+  font-size: 26rpx;
 }
 
 .pc.sm .pc-q {
   font-size: 22rpx;
 }
 
-.pc.lg .pc-inner {
-  gap: 2rpx;
-}
-
 .pc.lg .pc-rank {
-  font-size: 22rpx;
+  top: 4rpx;
+  left: 4rpx;
+  font-size: 50rpx;
 }
 
 .pc.lg .pc-suit {
-  font-size: 26rpx;
+  bottom: 3rpx;
+  right: 3rpx;
+  font-size: 36rpx;
 }
 
 .pc.lg .pc-q {
   font-size: 30rpx;
 }
 
-.pc.xl .pc-inner {
-  gap: 4rpx;
-}
-
 .pc.xl .pc-rank {
-  font-size: 30rpx;
+  top: 4rpx;
+  left: 4rpx;
+  font-size: 92rpx;
 }
 
 .pc.xl .pc-suit {
-  font-size: 36rpx;
+  bottom: 2rpx;
+  right: 2rpx;
+  font-size: 58rpx;
 }
 
 .pc.xl .pc-q {
-  font-size: 38rpx;
+  font-size: 60rpx;
 }
 </style>

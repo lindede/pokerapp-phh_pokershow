@@ -54,7 +54,7 @@
               }"
             >
             <view class="player-top">
-              <view class="player-left">
+              <view class="player-info">
                 <view class="player-head">
                   <view class="title-line">
                     <view
@@ -81,36 +81,23 @@
                   </view>
                 </view>
               </view>
-              <view class="player-cards-block">
-                <view
-                  class="player-tags-beside-holes"
-                  :class="{ 'action-trail-grid': replayActive }"
-                >
+              <view class="player-action-trail">
+                <template v-if="replayActive || p.action || showWinsTag(p)">
                   <template v-if="replayActive">
-                    <view
-                      v-for="st in ACTION_TRAIL_STREETS"
-                      :key="'col-' + p.id + '-' + st"
-                      class="action-trail-col"
-                    >
-                      <view class="action-trail-col-stack">
-                        <view
-                          v-for="(item, ti) in actionTrailForStreet(p, st)"
-                          :key="'at-' + p.id + '-' + st + '-' + ti"
-                          class="action-trail-item"
-                        >
-                          <text class="action-trail-label">{{ item.labelZh }}</text>
-                          <text
-                            v-if="item.chipsLine"
-                            class="action-trail-chips"
-                          >{{ item.chipsLine }}</text>
-                        </view>
-                        <view
-                          v-if="st === 'river' && showWinsTag(p)"
-                          class="action-trail-item action-wins-tag"
-                          :class="{ 'action-wins-tag--celebrate': winsTagCelebrate(p) }"
-                        >
-                          <text class="action-trail-label">WINS</text>
-                        </view>
+                    <view class="action-trail-col-stack">
+                      <view
+                        v-for="(item, ti) in actionTrailForStreet(p, state.street)"
+                        :key="'at-' + p.id + '-' + state.street + '-' + ti"
+                        class="action-trail-item"
+                      >
+                        <text class="action-trail-label">{{ formatActionTrailLine(item) }}</text>
+                      </view>
+                      <view
+                        v-if="state.street === 'river' && showWinsTag(p)"
+                        class="action-trail-item action-wins-tag"
+                        :class="{ 'action-wins-tag--celebrate': winsTagCelebrate(p) }"
+                      >
+                        <text class="action-trail-label">WINS</text>
                       </view>
                     </view>
                   </template>
@@ -126,7 +113,9 @@
                       <text class="action-trail-label">WINS</text>
                     </view>
                   </template>
-                </view>
+                </template>
+              </view>
+              <view class="player-cards-block">
                 <view class="hole-row">
                   <PokerCard :code="p.hole[0]" :size="pokerCardSize" />
                   <PokerCard :code="p.hole[1]" :size="pokerCardSize" />
@@ -206,7 +195,11 @@
               :class="{ focus: state.focusPlayerId === p.id }"
             >
               <view class="ls-equity-td">
-                <text class="ls-equity-val">{{ equityStepView.rows[idx]?.rawEquity ?? '--' }}</text>
+                <text class="ls-equity-num">{{ equityStepView.rows[idx]?.rawEquityParts.num ?? '--' }}</text>
+                <text
+                  v-if="equityStepView.rows[idx]?.rawEquityParts.suffix"
+                  class="ls-equity-suffix"
+                >{{ equityStepView.rows[idx]?.rawEquityParts.suffix }}</text>
                 <text
                   v-if="equityStepView.rows[idx]?.rawEquityTrend === 'up'"
                   :key="'raw-up-' + idx + '-' + state.replayStep"
@@ -219,7 +212,11 @@
                 >▼</text>
               </view>
               <view class="ls-equity-td">
-                <text class="ls-equity-val">{{ equityStepView.rows[idx]?.averageEquity ?? '--' }}</text>
+                <text class="ls-equity-num">{{ equityStepView.rows[idx]?.averageEquityParts.num ?? '--' }}</text>
+                <text
+                  v-if="equityStepView.rows[idx]?.averageEquityParts.suffix"
+                  class="ls-equity-suffix"
+                >{{ equityStepView.rows[idx]?.averageEquityParts.suffix }}</text>
                 <text
                   v-if="equityStepView.rows[idx]?.averageEquityTrend === 'up'"
                   :key="'avg-up-' + idx + '-' + state.replayStep"
@@ -231,7 +228,13 @@
                   class="ls-equity-trend ls-equity-trend--down"
                 >▼</text>
               </view>
-              <text class="ls-equity-td ls-equity-td--plain">{{ equityStepView.rows[idx]?.potOdds ?? '--' }}</text>
+              <view class="ls-equity-td ls-equity-td--plain">
+                <text class="ls-equity-num">{{ equityStepView.rows[idx]?.potOddsParts.num ?? '--' }}</text>
+                <text
+                  v-if="equityStepView.rows[idx]?.potOddsParts.suffix"
+                  class="ls-equity-suffix"
+                >{{ equityStepView.rows[idx]?.potOddsParts.suffix }}</text>
+              </view>
             </view>
           </view>
           <view class="ls-detail-area">
@@ -353,13 +356,6 @@ import type {
   Street,
 } from "@/types/commentary";
 
-const ACTION_TRAIL_STREETS: Street[] = [
-  "preflop",
-  "flop",
-  "turn",
-  "river",
-];
-
 const launchQuery = parseLaunchQuery();
 const isLandscapeMode = isLandscapeLaunchMode(launchQuery);
 const skipIntroModal = isReviewLaunchMode(launchQuery);
@@ -396,6 +392,11 @@ function actionTrailForStreet(
 ): ReplayActionTrailItem[] {
   const trail = p.actionTrail ?? [];
   return trail.filter((x) => (x.street ?? "preflop") === st);
+}
+
+function formatActionTrailLine(item: ReplayActionTrailItem): string {
+  if (item.chipsLine) return `${item.labelZh} ${item.chipsLine}`;
+  return item.labelZh;
 }
 
 const {
@@ -802,7 +803,7 @@ $ls-top-row-gap: 10rpx;
 }
 
 .ls-layout--row .panel-board {
-  padding: 10rpx 14rpx;
+  padding: 8rpx 10rpx;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -970,8 +971,7 @@ $ls-top-row-gap: 10rpx;
   flex-direction: row;
   align-items: center;
   justify-content: center;
-  gap: 4rpx;
-  font-size: 36rpx;
+  gap: 2rpx;
   font-weight: 600;
   color: rgba(245, 245, 245, 0.95);
   box-sizing: border-box;
@@ -984,7 +984,15 @@ $ls-top-row-gap: 10rpx;
   justify-content: center;
 }
 
-.ls-equity-val {
+.ls-equity-num {
+  font-size: 64rpx;
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.ls-equity-suffix {
+  font-size: 36rpx;
+  font-weight: 600;
   line-height: 1.1;
 }
 
@@ -1086,34 +1094,34 @@ $ls-top-row-gap: 10rpx;
 }
 
 .ls-detail-empty-text {
-  font-size: 32rpx;
+  font-size: 36rpx;
   color: $ls-text-muted;
 }
 
 .ls-detail-panels {
   display: flex;
   flex-direction: column;
-  gap: 10rpx;
-  padding-bottom: 4rpx;
+  gap: 6rpx;
+  padding-bottom: 2rpx;
 }
 
 .ls-detail-panel {
   background: rgba(0, 0, 0, 0.22);
   border: 1rpx solid $ls-border;
   border-radius: 12rpx;
-  padding: 10rpx 12rpx;
+  padding: 8rpx 12rpx;
   box-sizing: border-box;
 }
 
 .ls-detail-panel-head {
-  margin-bottom: 6rpx;
-  padding-bottom: 6rpx;
+  margin-bottom: 4rpx;
+  padding-bottom: 4rpx;
   border-bottom: 1rpx solid rgba(255, 255, 255, 0.06);
 }
 
 .ls-detail-panel-caption {
   display: block;
-  font-size: 22rpx;
+  font-size: 28rpx;
   font-weight: 600;
   color: rgba(245, 245, 245, 0.88);
   line-height: 1.35;
@@ -1125,7 +1133,7 @@ $ls-top-row-gap: 10rpx;
 .ls-detail-bars {
   display: flex;
   flex-direction: column;
-  gap: 10rpx;
+  gap: 4rpx;
 }
 
 .ls-detail-bar-row {
@@ -1133,12 +1141,12 @@ $ls-top-row-gap: 10rpx;
   flex-direction: row;
   align-items: center;
   gap: 12rpx;
-  min-height: 42rpx;
+  min-height: 40rpx;
 }
 
 .ls-detail-bar-name {
-  flex: 0 0 108rpx;
-  font-size: 30rpx;
+  flex: 0 0 128rpx;
+  font-size: 36rpx;
   color: rgba(245, 245, 245, 0.92);
   line-height: 1.2;
   white-space: nowrap;
@@ -1149,7 +1157,7 @@ $ls-top-row-gap: 10rpx;
 .ls-detail-bar-track {
   flex: 1;
   min-width: 0;
-  height: 20rpx;
+  height: 24rpx;
   background: rgba(255, 255, 255, 0.08);
   border-radius: 8rpx;
   overflow: hidden;
@@ -1162,9 +1170,9 @@ $ls-top-row-gap: 10rpx;
 }
 
 .ls-detail-bar-pct {
-  flex: 0 0 88rpx;
+  flex: 0 0 96rpx;
   text-align: right;
-  font-size: 32rpx;
+  font-size: 38rpx;
   font-weight: 600;
   color: #ffffff;
   font-variant-numeric: tabular-nums;
@@ -1191,6 +1199,23 @@ $ls-top-row-gap: 10rpx;
   background: $ls-surface-2;
   border: 2rpx solid transparent;
   border-bottom: 1rpx solid $ls-border;
+}
+
+.page-root--ls .player-top {
+  grid-template-columns: 400rpx 248rpx 1fr;
+  column-gap: 16rpx;
+  align-items: center;
+}
+
+.page-root--ls .player-info {
+  width: 400rpx;
+  max-width: 400rpx;
+}
+
+.page-root--ls .player-action-trail {
+  width: 248rpx;
+  max-width: 248rpx;
+  margin-left: 0;
 }
 
 .page-root--ls .player-card:last-child:not(.focus) {
@@ -1223,10 +1248,53 @@ $ls-top-row-gap: 10rpx;
 
 .page-root--ls .pot-text {
   color: $ls-teal-light;
+  font-size: 42rpx;
 }
 
 .page-root--ls .blinds-level {
   color: $ls-text-muted;
+  font-size: 34rpx;
+}
+
+.page-root--ls .p-name {
+  font-size: 40rpx;
+}
+
+.page-root--ls .pos-badge {
+  min-width: 52rpx;
+  height: 36rpx;
+  padding: 0 10rpx;
+  border-radius: 8rpx;
+}
+
+.page-root--ls .pos-badge-txt {
+  font-size: 28rpx;
+}
+
+.page-root--ls .p-meta-line {
+  font-size: 34rpx;
+}
+
+.page-root--ls .p-chip-ico {
+  width: 34rpx;
+  height: 34rpx;
+}
+
+.page-root--ls .board-row {
+  gap: 8rpx;
+}
+
+.page-root--ls .community-row {
+  gap: 6rpx;
+}
+
+.page-root--ls .player-cards-block {
+  gap: 4rpx;
+  align-items: flex-start;
+}
+
+.page-root--ls .hole-row {
+  gap: 6rpx;
 }
 
 .page-root--ls .nar-step-glyph {
@@ -1251,12 +1319,36 @@ $ls-top-row-gap: 10rpx;
   color: $ls-text-muted;
 }
 
+.page-root--ls .action-trail-col-stack {
+  width: 100%;
+  max-width: 248rpx;
+  align-items: flex-start;
+  align-self: flex-start;
+}
+
 .page-root--ls .action-trail-item {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   background: rgba(38, 166, 154, 0.82);
+  padding: 10rpx 16rpx;
+}
+
+.page-root--ls .action-trail-label {
+  font-size: 36rpx;
 }
 
 .page-root--ls .action-pill {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
   background: rgba(38, 166, 154, 0.82);
+  padding: 10rpx 16rpx;
+}
+
+.page-root--ls .action-txt {
+  font-size: 36rpx;
 }
 
 .page-root--ls .nav-hand {
@@ -1505,28 +1597,43 @@ $ls-top-row-gap: 10rpx;
   padding-bottom: 4rpx;
 }
 
-.action-trail-grid {
-  display: flex;
-  flex-direction: row;
-  align-items: flex-start;
-  gap: 6rpx;
-  flex-shrink: 0;
-}
-
-.action-trail-col {
-  flex: 0 0 76rpx;
-  width: 76rpx;
-  min-width: 76rpx;
-  max-width: 76rpx;
-  box-sizing: border-box;
-}
-
 .action-trail-col-stack {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+  align-self: flex-start;
   gap: 6rpx;
+  flex-shrink: 0;
   width: 100%;
+  max-width: 200rpx;
+}
+
+.action-trail-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  align-self: flex-start;
+  flex-shrink: 0;
+  width: 100%;
+  max-width: 100%;
+  background: #2563eb;
+  border-radius: 8rpx;
+  padding: 6rpx 12rpx;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.action-trail-label {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #fff;
+  line-height: 1.2;
+  white-space: nowrap;
+  text-align: left;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .player-card {
@@ -1549,21 +1656,34 @@ $ls-top-row-gap: 10rpx;
 }
 
 .player-top {
-  display: flex;
-  flex-direction: row;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 280rpx 200rpx 1fr;
   align-items: center;
+  column-gap: 12rpx;
   min-height: 88rpx;
 }
 
-.player-left {
-  flex: 1;
-  padding-right: 12rpx;
+.player-info {
+  width: 280rpx;
+  max-width: 280rpx;
   min-width: 0;
   display: flex;
   flex-direction: column;
   justify-content: center;
   gap: 8rpx;
+  box-sizing: border-box;
+}
+
+.player-action-trail {
+  width: 200rpx;
+  max-width: 200rpx;
+  min-width: 0;
+  align-self: center;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  box-sizing: border-box;
 }
 
 .player-head {
@@ -1579,53 +1699,18 @@ $ls-top-row-gap: 10rpx;
   display: flex;
   flex-direction: row;
   align-items: center;
+  justify-content: flex-end;
+  justify-self: end;
   gap: 10rpx;
-  flex-shrink: 0;
+  min-width: 0;
+  width: auto;
 }
 
-.player-tags-beside-holes {
+.hole-row {
   display: flex;
   flex-direction: row;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  align-content: flex-start;
-  gap: 6rpx;
-  max-width: 300rpx;
-  flex-shrink: 1;
-  min-width: 0;
-}
-
-.player-tags-beside-holes.action-trail-grid {
-  flex-wrap: nowrap;
-  max-width: none;
-  align-items: flex-start;
-}
-
-.action-trail-item {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  width: 100%;
-  max-width: 100%;
-  background: #2563eb;
-  border-radius: 6rpx;
-  padding: 4rpx 8rpx;
-  box-sizing: border-box;
-}
-
-.action-trail-label {
-  font-size: 17rpx;
-  color: #fff;
-  line-height: 1.25;
-}
-
-.action-trail-chips {
-  font-size: 15rpx;
-  font-weight: 700;
-  color: #fde047;
-  line-height: 1.3;
-  word-break: break-all;
-  margin-top: 2rpx;
+  gap: 14rpx;
+  flex-shrink: 0;
 }
 
 .action-wins-tag {
@@ -1825,22 +1910,25 @@ $ls-top-row-gap: 10rpx;
 
 .action-pill {
   flex-shrink: 0;
-  align-self: center;
+  align-self: flex-start;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
   background: #2563eb;
-  border-radius: 6rpx;
-  padding: 2rpx 8rpx;
+  border-radius: 8rpx;
+  padding: 6rpx 12rpx;
 }
 
 .action-txt {
-  font-size: 17rpx;
+  font-size: 28rpx;
+  font-weight: 600;
   color: #fff;
-}
-
-.hole-row {
-  display: flex;
-  flex-direction: row;
-  gap: 14rpx;
-  flex-shrink: 0;
+  line-height: 1.2;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .analysis-box {

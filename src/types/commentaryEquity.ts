@@ -30,11 +30,19 @@ export interface CommentaryEquityPayload {
 /** 相对上一步权益数值变化方向 */
 export type EquityValueTrend = "up" | "down" | "none";
 
+export interface DisplayParts {
+  num: string;
+  suffix: string;
+}
+
 export interface EquitySeatRow {
   seatIndex: number;
   rawEquity: string;
   averageEquity: string;
   potOdds: string;
+  rawEquityParts: DisplayParts;
+  averageEquityParts: DisplayParts;
+  potOddsParts: DisplayParts;
   rawEquityTrend: EquityValueTrend;
   averageEquityTrend: EquityValueTrend;
 }

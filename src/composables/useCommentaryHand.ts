@@ -1413,9 +1413,14 @@ export function useCommentaryHand() {
 
   /** 下一局：i = 当前 meta.i + 1 取解说，返回后用新 meta.i 取语音 */
   function loadNextHand() {
-    const cur = Number(state.voiceHandIndex);
-    if (!Number.isFinite(cur)) {
+    const s = String(state.handIndex).trim();
+    if (!s || s === DEV_COMMENTARY_HAND_INDEX) {
       uni.showToast({ title: "暂无 meta.i", icon: "none" });
+      return;
+    }
+    const cur = Number(s);
+    if (!Number.isFinite(cur)) {
+      uni.showToast({ title: "手牌编号不是数字，无法切换", icon: "none" });
       return;
     }
     loadApi({ silentToast: true, requestHandIndex: String(cur + 1) });
