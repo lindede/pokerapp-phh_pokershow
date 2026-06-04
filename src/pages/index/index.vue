@@ -53,7 +53,10 @@
                 'replay-folded': p.folded,
               }"
             >
-            <view class="player-top">
+            <view
+              class="player-top"
+              :class="{ 'player-top--trail-row': !actionTrailStreetScoped }"
+            >
               <view class="player-info">
                 <view class="player-head">
                   <view class="title-line">
@@ -81,19 +84,60 @@
                   </view>
                 </view>
               </view>
-              <view class="player-action-trail">
+              <view
+                class="player-action-trail"
+                :class="{
+                  'player-action-trail--street': !actionTrailStreetScoped,
+                  [`player-action-trail--street-cols-${actionTrailStreetColumns.length}`]:
+                    !actionTrailStreetScoped,
+                }"
+              >
                 <template v-if="replayActive || p.action || showWinsTag(p)">
                   <template v-if="replayActive">
-                    <view class="action-trail-col-stack">
+                    <view
+                      :class="
+                        actionTrailStreetScoped
+                          ? 'action-trail-col-stack'
+                          : 'action-trail-street-grid'
+                      "
+                      :style="actionTrailStreetGridStyle"
+                    >
+                      <template v-if="actionTrailStreetScoped">
+                        <view
+                          v-for="(item, ti) in actionTrailByStreet(p, state.street)"
+                          :key="'at-' + p.id + '-' + state.street + '-' + ti"
+                          class="action-trail-item"
+                        >
+                          <text class="action-trail-label">{{ formatActionTrailLine(item) }}</text>
+                        </view>
+                      </template>
+                      <template v-else>
+                        <view
+                          v-for="stCol in actionTrailStreetColumns"
+                          :key="'stcol-' + p.id + '-' + stCol"
+                          class="action-trail-street-col"
+                        >
+                          <view
+                            v-for="(item, ti) in actionTrailByStreet(p, stCol)"
+                            :key="'at-' + p.id + '-' + stCol + '-' + ti"
+                            class="action-trail-item action-trail-item--stacked"
+                          >
+                            <text class="action-trail-label">{{ item.labelZh }}</text>
+                            <text v-if="item.chipsLine" class="action-trail-chips">{{
+                              item.chipsLine
+                            }}</text>
+                          </view>
+                          <view
+                            v-if="stCol === 'river' && showWinsTag(p)"
+                            class="action-trail-item action-trail-item--stacked action-wins-tag action-wins-tag--compact"
+                            :class="{ 'action-wins-tag--celebrate': winsTagCelebrate(p) }"
+                          >
+                            <text class="action-trail-label">WINS</text>
+                          </view>
+                        </view>
+                      </template>
                       <view
-                        v-for="(item, ti) in actionTrailForStreet(p, state.street)"
-                        :key="'at-' + p.id + '-' + state.street + '-' + ti"
-                        class="action-trail-item"
-                      >
-                        <text class="action-trail-label">{{ formatActionTrailLine(item) }}</text>
-                      </view>
-                      <view
-                        v-if="state.street === 'river' && showWinsTag(p)"
+                        v-if="actionTrailStreetScoped && showWinsTag(p) && state.street === 'river'"
                         class="action-trail-item action-wins-tag"
                         :class="{ 'action-wins-tag--celebrate': winsTagCelebrate(p) }"
                       >
@@ -316,6 +360,13 @@
           >
             <text class="voice-glyph">{{ state.voiceOpen ? "🔊" : "🔇" }}</text>
           </view>
+          <view
+            v-if="showPcOrientationToggle"
+            class="orient-toggle"
+            @tap="togglePcLayoutOrientation"
+          >
+            <text class="orient-glyph">{{ isLandscapeMode ? "竖屏" : "横屏" }}</text>
+          </view>
           <text
             class="nav-hand"
             :class="{ 'nav-disabled': state.loading }"
@@ -331,6 +382,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
+import { isPcH5Browser } from "@/utils/platform";
 // #ifdef MP-WEIXIN
 import { onLoad, onShareAppMessage } from "@dcloudio/uni-app";
 // #endif
@@ -340,6 +392,7 @@ import { useCommentaryHand } from "@/composables/useCommentaryHand";
 import { boardIndicesForDealBoardStep } from "@/utils/replayByAction";
 import { getWindowMetrics } from "@/utils/layout";
 import {
+  applyDefaultH5Viewport,
   applyLandscapeLaunchViewport,
   applyReviewLaunchViewport,
   getLandscapeViewportHeight,
@@ -357,18 +410,40 @@ import type {
 } from "@/types/commentary";
 
 const launchQuery = parseLaunchQuery();
-const isLandscapeMode = isLandscapeLaunchMode(launchQuery);
+const launchLandscape = isLandscapeLaunchMode(launchQuery);
 const skipIntroModal = isReviewLaunchMode(launchQuery);
-const pokerCardSize = computed(() => (isLandscapeMode ? "xl" : "lg"));
+const pcLayoutLandscape = ref(false);
+const isLandscapeMode = computed(
+  () => launchLandscape || pcLayoutLandscape.value,
+);
+/** m=rv & ls=1：动作 icon 仅当前街、竖向堆叠；其余模式按街分列展示 */
+const actionTrailStreetScoped = computed(
+  () => isLandscapeMode.value && skipIntroModal,
+);
+const pokerCardSize = computed(() => (isLandscapeMode.value ? "xl" : "lg"));
 const isMpWeixin = process.env.UNI_PLATFORM === "mp-weixin";
+const showPcOrientationToggle =
+  !isMpWeixin && !skipIntroModal && !launchLandscape && isPcH5Browser();
 
 // #ifdef H5
-if (isLandscapeMode) {
+if (launchLandscape) {
   applyLandscapeLaunchViewport();
 } else if (skipIntroModal) {
   applyReviewLaunchViewport();
 }
 // #endif
+
+function togglePcLayoutOrientation() {
+  // #ifdef H5
+  pcLayoutLandscape.value = !pcLayoutLandscape.value;
+  if (pcLayoutLandscape.value) {
+    applyLandscapeLaunchViewport();
+  } else {
+    applyDefaultH5Viewport();
+  }
+  updateScrollHeight();
+  // #endif
+}
 
 const BEIAN_URL = "https://beian.miit.gov.cn";
 
@@ -386,12 +461,11 @@ function openBeianLink() {
   // #endif
 }
 
-function actionTrailForStreet(
+function actionTrailByStreet(
   p: PlayerState,
   st: Street,
 ): ReplayActionTrailItem[] {
-  const trail = p.actionTrail ?? [];
-  return trail.filter((x) => (x.street ?? "preflop") === st);
+  return (p.actionTrail ?? []).filter((x) => (x.street ?? "preflop") === st);
 }
 
 function formatActionTrailLine(item: ReplayActionTrailItem): string {
@@ -483,7 +557,7 @@ function updateScrollHeight() {
   const sys = getWindowMetrics();
   const dockRpx = skipIntroModal ? 0 : 150;
   const dockPx = (dockRpx * sys.windowWidth) / 750;
-  if (isLandscapeMode) {
+  if (isLandscapeMode.value) {
     const pageH = Math.min(
       getLandscapeViewportHeight(),
       sys.windowHeight,
@@ -529,7 +603,7 @@ onShareAppMessage(() => {
 onMounted(() => {
   updateScrollHeight();
   // #ifdef H5
-  if (isLandscapeMode) {
+  if (launchLandscape) {
     applyLandscapeLaunchViewport();
     updateScrollHeight();
   } else if (skipIntroModal) {
@@ -562,6 +636,58 @@ function onTapNextHand() {
 }
 
 const replayActive = computed(() => state.byActionTimeline.length > 0);
+
+const ACTION_TRAIL_STREET_ORDER: Street[] = ["preflop", "flop", "turn", "river"];
+const ACTION_TRAIL_STREET_GAP_RPX = 6;
+
+function actionTrailStreetColWRpx(colCount: number): number {
+  if (isLandscapeMode.value) {
+    if (colCount <= 2) return 76;
+    if (colCount === 3) return 72;
+    return 68;
+  }
+  if (colCount <= 2) return 72;
+  if (colCount === 3) return 62;
+  return 60;
+}
+
+/** 河牌列略宽，容纳 WINS 四字 + 左右内边距 */
+function actionTrailRiverColExtraRpx(): number {
+  return isLandscapeMode.value ? 12 : 18;
+}
+
+function actionTrailGridColumnWidthsRpx(streets: Street[]): number[] {
+  const colW = actionTrailStreetColWRpx(streets.length);
+  const riverExtra = actionTrailRiverColExtraRpx();
+  return streets.map((st) => (st === "river" ? colW + riverExtra : colW));
+}
+
+function actionTrailGridTotalWidthRpx(colWidths: number[]): number {
+  if (colWidths.length === 0) return 0;
+  return (
+    colWidths.reduce((sum, w) => sum + w, 0) +
+    (colWidths.length - 1) * ACTION_TRAIL_STREET_GAP_RPX
+  );
+}
+
+/** 非录屏宽屏：按街分列，列数随当前回放街推进（preflop → +flop → +turn → +river） */
+const actionTrailStreetColumns = computed((): Street[] => {
+  const idx = ACTION_TRAIL_STREET_ORDER.indexOf(state.street);
+  if (idx < 0) return ["preflop"];
+  return ACTION_TRAIL_STREET_ORDER.slice(0, idx + 1);
+});
+
+/** 各玩家行共用固定列宽，保证 preflop/flop/turn/river 纵向对齐 */
+const actionTrailStreetGridStyle = computed(() => {
+  if (actionTrailStreetScoped.value) return undefined;
+  const streets = actionTrailStreetColumns.value;
+  const colWidths = actionTrailGridColumnWidthsRpx(streets);
+  return {
+    width: `${actionTrailGridTotalWidthRpx(colWidths)}rpx`,
+    gridTemplateColumns: colWidths.map((w) => `${w}rpx`).join(" "),
+    columnGap: `${ACTION_TRAIL_STREET_GAP_RPX}rpx`,
+  };
+});
 
 const boardHighlightSet = computed(() => {
   if (!replayActive.value) return new Set<number>();
@@ -631,7 +757,7 @@ const replaySliderPercent = computed(() => {
 });
 
 const replaySliderActiveColor = computed(() =>
-  isLandscapeMode ? "#26a69a" : "#38bdf8",
+  isLandscapeMode.value ? "#26a69a" : "#38bdf8",
 );
 
 const replayRemainingMs = computed(() =>
@@ -1218,6 +1344,11 @@ $ls-top-row-gap: 10rpx;
   margin-left: 0;
 }
 
+.page-root--ls .player-action-trail.player-action-trail--street {
+  width: auto;
+  max-width: none;
+}
+
 .page-root--ls .player-card:last-child:not(.focus) {
   border-bottom: none;
 }
@@ -1356,7 +1487,8 @@ $ls-top-row-gap: 10rpx;
 }
 
 .page-root--ls .play-toggle,
-.page-root--ls .voice-toggle {
+.page-root--ls .voice-toggle,
+.page-root--ls .orient-toggle {
   background: #2a2a2a;
 }
 
@@ -1542,6 +1674,29 @@ $ls-top-row-gap: 10rpx;
   gap: 14rpx;
 }
 
+/* 非 ls=1：底牌与公牌同尺寸（64×90），底牌区间隙略收紧，不挤动作 icon 区 */
+.page-root:not(.page-root--ls) .community-row :deep(.pc.lg),
+.page-root:not(.page-root--ls) .hole-row :deep(.pc.lg) {
+  flex: none;
+  width: 64rpx;
+  height: 90rpx;
+  min-width: 64rpx;
+  max-width: 64rpx;
+}
+
+.page-root:not(.page-root--ls) .community-row {
+  gap: 10rpx;
+}
+
+.page-root:not(.page-root--ls) .hole-row {
+  gap: 8rpx;
+}
+
+.page-root:not(.page-root--ls) .player-cards-block {
+  gap: 4rpx;
+  flex-shrink: 0;
+}
+
 .pot-bar {
   flex-shrink: 0;
   border: 2rpx solid $pot-yellow;
@@ -1606,6 +1761,138 @@ $ls-top-row-gap: 10rpx;
   flex-shrink: 0;
   width: 100%;
   max-width: 200rpx;
+}
+
+/* ===== 非 m=rv&ls=1：动作 icon 区域（仅 .player-action-trail--street） ===== */
+.player-top.player-top--trail-row {
+  grid-template-columns: 280rpx auto minmax(156rpx, auto);
+  column-gap: 8rpx;
+}
+
+.player-action-trail.player-action-trail--street {
+  width: auto;
+  max-width: none;
+  justify-self: start;
+  align-self: center;
+  flex-shrink: 0;
+  margin-left: -52rpx;
+  margin-right: 20rpx;
+}
+
+.player-action-trail--street .action-trail-street-grid {
+  display: grid;
+  align-items: start;
+  box-sizing: border-box;
+}
+
+.player-action-trail--street .action-trail-street-col {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4rpx;
+  min-width: 0;
+}
+
+.player-action-trail--street .action-trail-street-col .action-trail-item {
+  width: 100%;
+  padding: 4rpx 4rpx;
+  box-sizing: border-box;
+}
+
+.player-action-trail--street .action-trail-street-col .action-wins-tag--compact {
+  overflow: hidden;
+  padding: 4rpx 6rpx;
+  box-sizing: border-box;
+}
+
+.player-action-trail--street .action-trail-item.action-trail-item--stacked {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2rpx;
+  padding: 4rpx 4rpx;
+  box-sizing: border-box;
+}
+
+.player-action-trail--street .action-trail-item.action-trail-item--stacked.action-wins-tag--compact {
+  padding: 4rpx 6rpx;
+  overflow: hidden;
+  width: 100%;
+}
+
+.player-action-trail--street .action-trail-item--stacked .action-trail-label {
+  display: block;
+  width: 100%;
+  font-size: 22rpx;
+  line-height: 1.15;
+  white-space: nowrap;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.player-action-trail--street .action-trail-chips {
+  display: block;
+  width: 100%;
+  font-size: 18rpx;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.92);
+  line-height: 1.1;
+  white-space: nowrap;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.player-action-trail--street-cols-3 .action-trail-item--stacked .action-trail-label {
+  font-size: 20rpx;
+}
+
+.player-action-trail--street-cols-3 .action-trail-chips {
+  font-size: 17rpx;
+}
+
+.player-action-trail--street-cols-4 .action-trail-item--stacked .action-trail-label {
+  font-size: 19rpx;
+}
+
+.player-action-trail--street-cols-4 .action-trail-chips {
+  font-size: 16rpx;
+}
+
+/* WINS：河牌列加宽 + 小字号，完整显示在框内 */
+.player-action-trail--street
+  .action-trail-item.action-trail-item--stacked.action-wins-tag--compact
+  .action-trail-label {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  font-size: 15rpx;
+  font-weight: 800;
+  letter-spacing: 0;
+  line-height: 1.2;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
+.page-root--ls .player-top.player-top--trail-row {
+  grid-template-columns: 400rpx auto minmax(180rpx, auto);
+  column-gap: 12rpx;
+}
+
+.page-root--ls .player-action-trail--street .action-trail-street-col .action-trail-item {
+  background: rgba(38, 166, 154, 0.82);
+}
+
+.page-root--ls .player-action-trail--street .action-trail-item--stacked .action-trail-label {
+  font-size: 22rpx;
+}
+
+.page-root--ls .player-action-trail--street .action-trail-chips {
+  font-size: 20rpx;
 }
 
 .action-trail-item {
@@ -2077,6 +2364,26 @@ $ls-top-row-gap: 10rpx;
 .voice-glyph {
   font-size: 28rpx;
   line-height: 1;
+}
+
+.orient-toggle {
+  flex-shrink: 0;
+  min-width: 56rpx;
+  height: 56rpx;
+  padding: 0 12rpx;
+  border-radius: 14rpx;
+  background: #334155;
+  align-items: center;
+  justify-content: center;
+  display: flex;
+}
+
+.orient-glyph {
+  font-size: 20rpx;
+  font-weight: 600;
+  color: #e2e8f0;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .dock-safe {

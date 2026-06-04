@@ -115,3 +115,27 @@ export function applyLandscapeLaunchViewport(): void {
     document.body.style.backgroundColor = "#0a0a0a";
   }
 }
+
+/** PC 切回竖屏：恢复默认 viewport 与页面背景 */
+export function applyDefaultH5Viewport(): void {
+  if (typeof document === "undefined") return;
+  let meta = document.querySelector('meta[name="viewport"]');
+  if (!meta) {
+    meta = document.createElement("meta");
+    meta.setAttribute("name", "viewport");
+    document.head.appendChild(meta);
+  }
+  meta.setAttribute(
+    "content",
+    "width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, viewport-fit=cover",
+  );
+  clearLandscapeLaunchDocument();
+}
+
+export function clearLandscapeLaunchDocument(): void {
+  if (typeof document === "undefined") return;
+  document.documentElement.classList.remove("launch-ls");
+  if (document.body) {
+    document.body.style.backgroundColor = "#0a2e1e";
+  }
+}
