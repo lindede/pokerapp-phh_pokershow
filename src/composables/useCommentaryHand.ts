@@ -278,18 +278,21 @@ function createCommentaryVoicePlayer(): CommentaryVoicePlayer {
 
 /** 解说 / 语音 API：条件编译，避免独立 config 模块在小程序里被错误注入 require('url') */
 let COMMENTARY_API_URL: string;
+let COMMENTARY_DATA_API_URL: string;
 let VOICE_LIST_API_URL: string;
 let VOICE_DATA_API_URL: string;
 let EQUITY_API_URL: string;
 // #ifdef H5
 /** H5 开发 / 生产均走同源 /v1、/v2（开发靠 Vite 代理，生产靠 Nginx 反代） */
 COMMENTARY_API_URL = "/v1/CommentaryLite";
+COMMENTARY_DATA_API_URL = "/v2/Commentary/data";
 VOICE_LIST_API_URL = "/v2/Commentary/voice/list";
 VOICE_DATA_API_URL = "/v2/Commentary/voice/data";
 EQUITY_API_URL = "/v2/Commentary/additional/equity";
 // #endif
 // #ifndef H5
 COMMENTARY_API_URL = "https://www.pokershow.top/v1/CommentaryLite";
+COMMENTARY_DATA_API_URL = "https://www.pokershow.top/v2/Commentary/data";
 VOICE_LIST_API_URL = "https://www.pokershow.top/v2/Commentary/voice/list";
 VOICE_DATA_API_URL = "https://www.pokershow.top/v2/Commentary/voice/data";
 EQUITY_API_URL = "https://www.pokershow.top/v2/Commentary/additional/equity";
@@ -325,6 +328,7 @@ export interface CommentaryUISnapshot {
   byActionTimeline?: ByActionEvent[];
   replayMeta?: CommentaryReplayMeta | null;
   heroSeatIndex?: number | null;
+  commentaryId?: string | null;
 }
 
 export interface LoadCommentaryOptions {
@@ -344,10 +348,14 @@ export interface LoadCommentaryOptions {
   fallbackSampleOnFail?: boolean;
   /** 失败时不弹 toast（首屏已展示示例时可静默） */
   silentOnFail?: boolean;
-  /** 首屏指定 k（与 initialHandIndex 同时提供时生效） */
+  /** 首屏指定 k（与 initialHandIndex / initialCommentaryId 同时提供时生效） */
   initialDatasetKey?: string;
   /** 首屏指定 i（与 initialDatasetKey 同时提供时生效） */
   initialHandIndex?: string;
+  /** 首屏指定稳定 id（与 initialDatasetKey 同时提供时走 /v2/Commentary/data） */
+  initialCommentaryId?: string;
+  /** 本次请求用稳定 id（走 /v2/Commentary/data） */
+  requestCommentaryId?: string;
 }
 
 function mergePlayers(target: PlayerState[], incoming: PlayerPayload[]) {
@@ -699,6 +707,8 @@ export function useCommentaryHand() {
   const state = reactive({
     datasetKey: DEV_COMMENTARY_DATASET_KEY,
     handIndex: DEV_COMMENTARY_HAND_INDEX,
+    /** meta.id；分享链接 k=all&id= 使用 */
+    commentaryId: null as string | null,
     /** 语音 list 就绪后与 voiceListHandIndex 同步，供「下一局」等读取 */
     voiceHandIndex: DEV_COMMENTARY_HAND_INDEX,
     pot: 0,
@@ -1120,6 +1130,7 @@ export function useCommentaryHand() {
       players: clonePlayers(state.players),
       focusPlayerId: state.focusPlayerId,
       heroSeatIndex: state.heroSeatIndex,
+      commentaryId: state.commentaryId,
       serverSummary: state.serverSummary,
       serverByAction: state.serverByAction.map((x) => ({
         event_index: x.event_index,
@@ -1170,9 +1181,10 @@ export function useCommentaryHand() {
     if (payload.focusPlayerId !== undefined) {
       state.focusPlayerId = payload.focusPlayerId;
     }
-    if (payload.heroSeatIndex !== undefined) {
-      state.heroSeatIndex = payload.heroSeatIndex;
+    if ("heroSeatIndex" in payload) {
+      state.heroSeatIndex = payload.heroSeatIndex ?? null;
     }
+    state.commentaryId = payload.commentaryId ?? null;
     if (payload.players != null && payload.players.length > 0) {
       if ("commentarySummary" in payload) {
         state.players.forEach((t) => {
@@ -1254,11 +1266,18 @@ export function useCommentaryHand() {
     }
   }
 
-  /** 页面刷新 / 首屏：默认 k=all、i=-1；也可由 URL 传入 initial k/i */
+  /** 页面刷新 / 首屏：默认 k=all、i=-1；URL 可传 k+id 或 k+i */
   function loadFresh(opts?: LoadCommentaryOptions) {
     clearNavHistory();
     const k = opts?.initialDatasetKey?.trim();
+    const id = opts?.initialCommentaryId?.trim();
     const i = opts?.initialHandIndex?.trim();
+    if (k && id) {
+      state.datasetKey = k;
+      state.handIndex = DEV_COMMENTARY_HAND_INDEX;
+      loadApi({ ...opts, requestCommentaryId: id });
+      return;
+    }
     if (k && i !== undefined && i !== "") {
       state.datasetKey = k;
       state.handIndex = i;
@@ -1308,14 +1327,16 @@ export function useCommentaryHand() {
       });
       return;
     }
+    const requestId = opts?.requestCommentaryId?.trim();
     const requestHandIndex = opts?.requestHandIndex ?? String(state.handIndex);
     const sentKey: NavRequestKey = {
       datasetKey: state.datasetKey,
-      handIndex: requestHandIndex,
+      handIndex: requestId ? DEV_COMMENTARY_HAND_INDEX : requestHandIndex,
     };
     state.loading = true;
-    const url =
-      `${COMMENTARY_API_URL.trim()}?k=${encodeURIComponent(state.datasetKey)}&i=${encodeURIComponent(requestHandIndex)}&_t=${Date.now()}`;
+    const url = requestId
+      ? `${COMMENTARY_DATA_API_URL.trim()}?k=${encodeURIComponent(state.datasetKey)}&id=${encodeURIComponent(requestId)}&_t=${Date.now()}`
+      : `${COMMENTARY_API_URL.trim()}?k=${encodeURIComponent(state.datasetKey)}&i=${encodeURIComponent(requestHandIndex)}&_t=${Date.now()}`;
     const endLoading = () => {
       state.loading = false;
     };
@@ -1456,6 +1477,7 @@ export function useCommentaryHand() {
       state.players = clonePlayers(DEFAULT_PLAYERS);
       state.focusPlayerId = null;
       state.heroSeatIndex = null;
+      state.commentaryId = null;
       state.datasetKey = DEV_COMMENTARY_DATASET_KEY;
       state.handIndex = DEV_COMMENTARY_HAND_INDEX;
       state.serverSummary = "";
@@ -1477,6 +1499,7 @@ export function useCommentaryHand() {
     state.handIndex = snap.handIndex;
     state.voiceHandIndex = snap.voiceHandIndex ?? snap.handIndex;
     state.heroSeatIndex = snap.heroSeatIndex ?? null;
+    state.commentaryId = snap.commentaryId ?? null;
     state.pot = snap.pot;
     state.serverSummary = snap.serverSummary;
     state.serverByAction = snap.serverByAction.map((x) => ({

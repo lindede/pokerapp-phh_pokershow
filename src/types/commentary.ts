@@ -70,6 +70,8 @@ export interface HandCommentaryPayload {
    * i=-1 时 meta.i 为当前局；明确 i 请求时 meta.i 与请求 i 一致；语音 list/data 仅用 meta.i。
    */
   handIndex?: number | string;
+  /** meta.id：稳定条目 id，分享链接 k=all&id= 使用 */
+  commentaryId?: string | null;
   pot?: number;
   /** 长度 5，null 表示未发出或未知 */
   board?: (string | null)[];

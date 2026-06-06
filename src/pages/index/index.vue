@@ -398,6 +398,7 @@ import {
   applyReviewLaunchViewport,
   getLandscapeViewportHeight,
   hasLaunchHandParams,
+  hasLaunchIdParams,
   isLandscapeLaunchMode,
   isReviewLaunchMode,
   parseLaunchQuery,
@@ -584,12 +585,17 @@ function scheduleRemoteLoad(mpLaunch?: ReturnType<typeof parseMpLaunchOptions>) 
     silentToast: true,
     fallbackSampleOnFail: true,
     silentOnFail: true,
-    ...(mpLaunch && hasLaunchHandParams(mpLaunch)
+    ...(mpLaunch && hasLaunchIdParams(mpLaunch)
       ? {
           initialDatasetKey: mpLaunch.k!.trim(),
-          initialHandIndex: mpLaunch.i!.trim(),
+          initialCommentaryId: mpLaunch.id!.trim(),
         }
-      : {}),
+      : mpLaunch && hasLaunchHandParams(mpLaunch)
+        ? {
+            initialDatasetKey: mpLaunch.k!.trim(),
+            initialHandIndex: mpLaunch.i!.trim(),
+          }
+        : {}),
   });
 }
 
@@ -602,6 +608,13 @@ onLoad((options) => {
 
 onShareAppMessage(() => {
   const k = state.datasetKey?.trim() || "all";
+  const id = state.commentaryId?.trim();
+  if (id) {
+    return {
+      title: "博弈技术学习",
+      path: `/pages/index/index?k=${encodeURIComponent(k)}&id=${encodeURIComponent(id)}`,
+    };
+  }
   const i = state.handIndex?.trim() ?? "-1";
   return {
     title: "博弈技术学习",
@@ -625,12 +638,17 @@ onMounted(() => {
   loadFresh({
     silentToast: true,
     fallbackSampleOnFail: true,
-    ...(hasLaunchHandParams(launchQuery)
+    ...(hasLaunchIdParams(launchQuery)
       ? {
           initialDatasetKey: launchQuery.k!.trim(),
-          initialHandIndex: launchQuery.i!.trim(),
+          initialCommentaryId: launchQuery.id!.trim(),
         }
-      : {}),
+      : hasLaunchHandParams(launchQuery)
+        ? {
+            initialDatasetKey: launchQuery.k!.trim(),
+            initialHandIndex: launchQuery.i!.trim(),
+          }
+        : {}),
   });
   // #endif
 });

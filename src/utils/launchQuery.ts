@@ -3,6 +3,8 @@
 export interface LaunchQueryParams {
   k?: string;
   i?: string;
+  /** 稳定条目 id；与 k 同现时首屏走 /v2/Commentary/data */
+  id?: string;
   m?: string;
   ls?: string;
 }
@@ -33,7 +35,7 @@ export function parseLaunchQuery(): LaunchQueryParams {
     return v != null && v !== "" ? v : undefined;
   };
 
-  return { k: pick("k"), i: pick("i"), m: pick("m"), ls: pick("ls") };
+  return { k: pick("k"), i: pick("i"), id: pick("id"), m: pick("m"), ls: pick("ls") };
 }
 
 /** 小程序 onLoad(options) 启动参数 */
@@ -45,11 +47,19 @@ export function parseMpLaunchOptions(
     const v = options[key];
     return v != null && v !== "" ? String(v).trim() : undefined;
   };
-  return { k: pick("k"), i: pick("i"), m: pick("m"), ls: pick("ls") };
+  return { k: pick("k"), i: pick("i"), id: pick("id"), m: pick("m"), ls: pick("ls") };
+}
+
+/** 同时有 k、id 时首屏走 /v2/Commentary/data */
+export function hasLaunchIdParams(q: LaunchQueryParams): boolean {
+  const k = q.k?.trim();
+  const id = q.id?.trim();
+  return Boolean(k && id);
 }
 
 /** 同时有 k、i 时首屏 CommentaryLite 用 URL 参数，否则默认 all / -1 */
 export function hasLaunchHandParams(q: LaunchQueryParams): boolean {
+  if (hasLaunchIdParams(q)) return false;
   const k = q.k?.trim();
   const i = q.i?.trim();
   return Boolean(k && i !== undefined && i !== "");
