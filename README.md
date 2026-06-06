@@ -8,6 +8,7 @@
 - **中文解说**：每步展示解说 headline / detail，步进时长随文案长度或语音时长调整
 - **语音解说**：对接 `/v2/Commentary/voice/*`，支持逐步播放与开关
 - **Hero 视角**：服务端 meta 含 `hero_seat_index` 时，Hero 常亮，他人发牌/弃牌快进
+- **稳定分享**：`meta.id` 支持 `k=all&id=` 链接（H5 / 小程序分享与首屏打开）
 - **胜率曲线**：对接 `/v2/Commentary/additional/equity` 展示各步胜率
 - **多布局模式**：竖屏、横屏（`ls=1`）、录屏嵌入（`m=rv`）等
 
@@ -55,25 +56,56 @@ Windows 也可双击 `start_local_server.bat` 启动 H5 开发服务。
 
 ## URL 启动参数
 
-H5 使用 hash 路由，参数可写在 `?` 或 `#/pages/index/index?` 后：
+H5 使用 hash 路由，参数可写在 `?` 或 `#/pages/index/index?` 后；微信小程序通过页面路径 query 传入（与分享链接一致）。
 
 | 参数 | 说明 | 示例 |
 |---|---|---|
 | `k` | 列表名称（数据集 key）；**目前仅支持 `all`** | `all` |
-| `i` | 手牌编号；`-1` 表示随机/当前局 | `2`、`-1` |
+| `id` | 稳定条目 id（`meta.id`）；与 `k` 同时存在时首屏走 `/v2/Commentary/data` | `175` |
+| `i` | 手牌编号（`meta.i`）；`-1` 表示随机/当前局；无 `id` 时用 `k+i` 走 `/v1/CommentaryLite` | `2`、`-1` |
 | `m=rv` | 录屏/嵌入模式：跳过介绍弹窗，固定 540px 竖屏 viewport | `m=rv` |
 | `ls=1` | 横屏 16:9 布局（1280×720 viewport），优先于 `m=rv` 的宽度设置 | `ls=1` |
+
+**首屏加载优先级**（H5 / 小程序相同）：
+
+1. 同时有 `k` + `id` → `GET /v2/Commentary/data?k=&id=`
+2. 同时有 `k` + `i` → `GET /v1/CommentaryLite?k=&i=`
+3. 否则 → 默认 `k=all`、`i=-1`
 
 示例：
 
 ```
+# 稳定 id 打开（分享推荐）
+http://localhost:5173/#/?k=all&id=175
+
+# 按列表序号打开
 http://localhost:5173/#/?k=all&i=-1
 http://localhost:5173/#/?k=all&i=2
+
+# 录屏 / 横屏
 http://localhost:5173/#/?k=all&i=5&m=rv
 http://localhost:5173/#/?k=all&i=5&m=rv&ls=1
 ```
 
-`k` 目前固定为 `all`（旧版形如 `v1_NLH_BB100_...` 的名称已废弃）。同时提供 `k`、`i` 时首屏直接请求对应手牌；否则默认 `k=all`、`i=-1`。
+`k` 目前固定为 `all`（旧版形如 `v1_NLH_BB100_...` 的名称已废弃）。
+
+**说明**：应用内「上一局 / 下一局」仍用 `CommentaryLite` + `meta.i` 递增/递减；语音 list/data、胜率接口也仍绑定响应里的 `meta.i`。`id` 主要用于分享链接与带参首屏打开。
+
+## 分享链接（微信小程序）
+
+`onShareAppMessage` 优先使用稳定 id：
+
+- 有 `meta.id` → `/pages/index/index?k=all&id=xxx`
+- 无 `meta.id`（旧数据）→ `/pages/index/index?k=all&i=5`
+
+## 后端 meta 字段
+
+| 字段 | 含义 | 前端用途 |
+|---|---|---|
+| `meta.k` | 数据集 key | `state.datasetKey` |
+| `meta.i` | 列表内手牌序号 | 下一局/语音/胜率请求 |
+| `meta.id` | 稳定条目 id | 分享、`k+id` 首屏、`state.commentaryId` |
+| `meta.hero_seat_index` | Hero 座位（0 起） | Hero 模式判定、黄框高亮；换局无此字段时清空 |
 
 ## 后端接口
 
@@ -89,7 +121,8 @@ VITE_COMMENTARY_DEV_PROXY_TARGET=http://127.0.0.1:9000
 
 | 路径 | 用途 |
 |---|---|
-| `GET /v1/CommentaryLite?k=&i=` | 手牌解说与 `by_action` 时间线 |
+| `GET /v1/CommentaryLite?k=&i=` | 手牌解说与 `by_action` 时间线（下一局、默认首屏） |
+| `GET /v2/Commentary/data?k=&id=` | 按稳定 id 拉取手牌（分享链接、`k+id` 首屏） |
 | `GET /v2/Commentary/voice/list?k=&i=` | 语音文件索引 |
 | `GET /v2/Commentary/voice/data?k=&i=&f=` | 语音文件数据 |
 | `GET /v2/Commentary/additional/equity?k=&i=` | 逐步胜率 |
@@ -107,6 +140,8 @@ VITE_COMMENTARY_DEV_PROXY_TARGET=http://127.0.0.1:9000
 | **非 Hero 模式** | 默认 1s；有语音则按语音时长 | 按文案长度，最短 2s |
 
 Hero 模式下他人弃牌、发牌、摊牌等也会快进；非 Hero 模式下 `deal_hole`、`deal_board`、`fold` 固定 1 秒（有对应语音文件时由语音步进接管）。
+
+换局（下一局 / 新 payload）时，若新 meta **无** `hero_seat_index`，前端会清空 Hero 状态，避免仍按 Hero 16ms 快进。
 
 ## 项目结构
 
@@ -140,9 +175,12 @@ npm run build:h5
 ## 微信小程序
 
 1. `npm run dev:mp-weixin` 或 `npm run build:mp-weixin`
-2. 用微信开发者工具打开 `dist/dev/mp-weixin` 或 `dist/build/mp-weixin`
-3. AppID 见 `src/manifest.json` → `mp-weixin.appid`
-4. 正式环境需在小程序后台配置合法 request 域名
+2. 用微信开发者工具打开 **`dist/dev/mp-weixin`**（开发）或 **`dist/build/mp-weixin`**（生产）
+3. 修改源码后需重新 build，并在开发者工具中 **编译**；若界面像旧版，可 **清缓存 → 全部清除** 后再编译
+4. AppID 见 `src/manifest.json` → `mp-weixin.appid`
+5. 正式环境需在小程序后台配置合法 request 域名；手机预览/正式版需 **上传** 后才会更新（与本地 `dist` 无关）
+
+H5 与小程序共用同一套源码；小程序不会自动热更新 `dist`，务必指向上述目录而非项目根目录。
 
 ## 开发说明
 
