@@ -83,6 +83,8 @@ export interface HandCommentaryPayload {
   /** 完整时间线，用于逐步回放 */
   byActionTimeline?: ByActionEvent[];
   replayMeta?: CommentaryReplayMeta;
+  /** meta.hero_seat_index：Hero 视角回放（常亮 hero、他人发牌/弃牌快进） */
+  heroSeatIndex?: number | null;
 }
 
 export interface PlayerState {

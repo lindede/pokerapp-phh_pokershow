@@ -473,6 +473,12 @@ function mergeRootMeta(
   if (typeof rawK === "string" && rawK.trim() !== "") {
     payload.datasetKey = rawK.trim();
   }
+  const rawHero =
+    m.hero_seat_index ?? m.heroSeatIndex ?? m.hero_seat ?? m.heroSeat;
+  if (rawHero !== undefined && rawHero !== null && String(rawHero).trim() !== "") {
+    const n = typeof rawHero === "number" ? rawHero : Number(rawHero);
+    if (Number.isFinite(n)) payload.heroSeatIndex = Math.round(n);
+  }
   return payload;
 }
 

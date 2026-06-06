@@ -20,6 +20,7 @@ import {
 import {
   buildReplayCumulativeMs,
   durationForByActionStep,
+  isHeroModeFastStep,
   stepIndexFromElapsedMs,
 } from "@/utils/replayTiming";
 import { DEFAULT_PLAYERS, SAMPLE_PAYLOAD } from "@/mock/sample-commentary";
@@ -323,6 +324,7 @@ export interface CommentaryUISnapshot {
   /** 旧快照可能缺省 */
   byActionTimeline?: ByActionEvent[];
   replayMeta?: CommentaryReplayMeta | null;
+  heroSeatIndex?: number | null;
 }
 
 export interface LoadCommentaryOptions {
@@ -461,7 +463,14 @@ export function useCommentaryHand() {
 
   function durationForCurrentReplayStep(): number {
     const ev = state.byActionTimeline[state.replayStep];
-    return ev ? durationForByActionStep(ev) : 0;
+    return ev
+      ? durationForByActionStep(ev, { heroSeatIndex: state.heroSeatIndex })
+      : 0;
+  }
+
+  function isCurrentStepHeroModeFast(): boolean {
+    const ev = state.byActionTimeline[state.replayStep];
+    return ev ? isHeroModeFastStep(ev, state.heroSeatIndex) : false;
   }
 
   function cancelVoiceGatedProgressRaf() {
@@ -627,9 +636,10 @@ export function useCommentaryHand() {
   }
 
   function shouldGateStepOnVoice(step: number): boolean {
-    if (!usesVoiceGatedReplay()) return false;
     const ev = state.byActionTimeline[step];
     if (!ev) return false;
+    if (isHeroModeFastStep(ev, state.heroSeatIndex)) return false;
+    if (!usesVoiceGatedReplay()) return false;
     return resolveVoiceFilename(ev.event_index, voiceIndexMap) != null;
   }
 
@@ -696,6 +706,8 @@ export function useCommentaryHand() {
     street: "preflop" as Street,
     players: clonePlayers(DEFAULT_PLAYERS),
     focusPlayerId: null as string | null,
+    /** meta.hero_seat_index；有值时 Hero 模式 */
+    heroSeatIndex: null as number | null,
     loading: false,
     serverSummary: "",
     serverByAction: [] as CommentaryActionItem[],
@@ -950,7 +962,9 @@ export function useCommentaryHand() {
       state.replayTotalMs = 0;
       return;
     }
-    const { cumulativeMs, totalMs } = buildReplayCumulativeMs(tl);
+    const { cumulativeMs, totalMs } = buildReplayCumulativeMs(tl, {
+      heroSeatIndex: state.heroSeatIndex,
+    });
     replayCumulativeMs = cumulativeMs;
     state.replayTotalMs = totalMs;
   }
@@ -996,6 +1010,7 @@ export function useCommentaryHand() {
     state.replayDetailText = snap.stepDetailText;
     if (
       !options?.skipVoice &&
+      !isCurrentStepHeroModeFast() &&
       (!state.replayPlaying || !usesVoiceGatedReplay())
     ) {
       playVoiceForCurrentStep({ force: true });
@@ -1104,6 +1119,7 @@ export function useCommentaryHand() {
       street: state.street,
       players: clonePlayers(state.players),
       focusPlayerId: state.focusPlayerId,
+      heroSeatIndex: state.heroSeatIndex,
       serverSummary: state.serverSummary,
       serverByAction: state.serverByAction.map((x) => ({
         event_index: x.event_index,
@@ -1153,6 +1169,9 @@ export function useCommentaryHand() {
     if (payload.street != null) state.street = payload.street;
     if (payload.focusPlayerId !== undefined) {
       state.focusPlayerId = payload.focusPlayerId;
+    }
+    if (payload.heroSeatIndex !== undefined) {
+      state.heroSeatIndex = payload.heroSeatIndex;
     }
     if (payload.players != null && payload.players.length > 0) {
       if ("commentarySummary" in payload) {
@@ -1436,6 +1455,7 @@ export function useCommentaryHand() {
       state.street = "preflop";
       state.players = clonePlayers(DEFAULT_PLAYERS);
       state.focusPlayerId = null;
+      state.heroSeatIndex = null;
       state.datasetKey = DEV_COMMENTARY_DATASET_KEY;
       state.handIndex = DEV_COMMENTARY_HAND_INDEX;
       state.serverSummary = "";
@@ -1456,6 +1476,7 @@ export function useCommentaryHand() {
     state.datasetKey = snap.datasetKey;
     state.handIndex = snap.handIndex;
     state.voiceHandIndex = snap.voiceHandIndex ?? snap.handIndex;
+    state.heroSeatIndex = snap.heroSeatIndex ?? null;
     state.pot = snap.pot;
     state.serverSummary = snap.serverSummary;
     state.serverByAction = snap.serverByAction.map((x) => ({

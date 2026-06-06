@@ -1,6 +1,5 @@
 /** H5 PC 浏览器（排除手机与触屏平板） */
-export function isPcH5Browser(): boolean {
-  if (typeof window === "undefined" || typeof navigator === "undefined") {
+export function isPcH5Browser(): boolean {  if (typeof window === "undefined" || typeof navigator === "undefined") {
     return false;
   }
 

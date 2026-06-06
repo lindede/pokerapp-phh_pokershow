@@ -51,6 +51,7 @@
               :class="{
                 focus: state.focusPlayerId === p.id,
                 'replay-folded': p.folded,
+                'player-card--hero': isHeroPlayer(p),
               }"
             >
             <view
@@ -485,6 +486,15 @@ const {
   seekReplayStepDelta,
   toggleVoiceOpen,
 } = useCommentaryHand();
+
+const isHeroMode = computed(
+  () => state.heroSeatIndex != null && state.heroSeatIndex >= 0,
+);
+
+function isHeroPlayer(p: PlayerState): boolean {
+  if (!isHeroMode.value) return false;
+  return p.id === `p${state.heroSeatIndex}`;
+}
 
 let narrTouchStartX = 0;
 let narrTouchStartY = 0;
@@ -1936,6 +1946,24 @@ $ls-top-row-gap: 10rpx;
 .player-card.focus {
   border-color: #facc15;
   box-shadow: 0 0 0 2rpx rgba(250, 204, 21, 0.25);
+}
+
+.player-card--hero {
+  background: rgba(250, 204, 21, 0.16);
+  border-color: rgba(250, 204, 21, 0.32);
+}
+
+.player-card--hero.focus {
+  background: rgba(250, 204, 21, 0.22);
+}
+
+.page-root--ls .player-card--hero {
+  background: rgba(38, 166, 154, 0.14);
+  border-color: rgba(38, 166, 154, 0.35);
+}
+
+.page-root--ls .player-card--hero.focus {
+  background: rgba(38, 166, 154, 0.2);
 }
 
 .player-card.replay-folded {

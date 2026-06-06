@@ -21,6 +21,7 @@ const ACTION_ZH: Record<string, string> = {
   small_blind: "下盲注",
   big_blind: "下盲注",
   ante: "前注",
+  showdown: "摊牌",
 };
 
 function isBlindPostAction(action: string): boolean {
@@ -44,11 +45,62 @@ function isWagerAction(action: string): boolean {
 }
 
 function actionLabelZh(action: string): string {
-  const a = (action || "").toLowerCase();
+  const a = normalizeActionKey(action);
   if (ACTION_ZH[a]) return ACTION_ZH[a];
   const m = /^(\d+)bet$/.exec(a);
   if (m) return `${m[1]}bet`;
-  return action ? String(action) : "";
+  return a ? String(a) : "";
+}
+
+/** 归一化服务端 action（去空白、复数、别名） */
+function normalizeActionKey(action: string): string {
+  const raw = (action || "").trim().toLowerCase();
+  if (!raw) return "";
+  const ALIAS: Record<string, string> = {
+    bets: "bet",
+    calls: "call",
+    raises: "raise",
+    checks: "check",
+    folds: "fold",
+    posts: "post",
+  };
+  return ALIAS[raw] ?? raw;
+}
+
+/**
+ * 结合本街 facing 推导展示文案：
+ * - 无人下注时 bet / 误标 call → 下注
+ * - 面对下注时 call → 跟注，raise/bet → 加注
+ */
+function resolveActionDisplayLabel(
+  e: ByActionEvent,
+  ctx: { maxFacingBefore: number; streetBefore: number[] },
+): string {
+  const action = normalizeActionKey(e.action || "");
+  if (!action) return "";
+
+  if (action === "fold" || action === "check" || action === "showdown") {
+    return actionLabelZh(action);
+  }
+  if (isBlindPostAction(action)) return actionLabelZh(action);
+
+  const isWager =
+    isWagerAction(action) || action === "call" || isBlindPostAction(action);
+  if (!isWager) return actionLabelZh(action);
+
+  const facing = ctx.maxFacingBefore;
+
+  if (facing <= 0) {
+    if (action === "call" || action === "bet") return "下注";
+    if (action === "raise" || /^\d+bet$/.test(action)) return "加注";
+  }
+
+  if (action === "call") return "跟注";
+  if (action === "bet" || action === "raise" || /^\d+bet$/.test(action)) {
+    return "加注";
+  }
+
+  return actionLabelZh(action);
 }
 
 function normStreet(s: string): Street {
@@ -139,7 +191,7 @@ function applyChipsAction(
   const si = e.seat_index;
   if (si == null || si < 0 || si >= seatCount) return;
 
-  const action = (e.action || "").toLowerCase();
+  const action = normalizeActionKey(e.action || "");
   const chipsRaw = e.chips;
   const chips =
     chipsRaw != null && Number.isFinite(Number(chipsRaw))
@@ -288,22 +340,23 @@ function recordPlayerActionTrail(
   seatCount: number,
   potAfter: number,
   bbUnit: number,
-): void {
-  const action = (e.action || "").toLowerCase();
-  if (action === "deal_board" || action === "deal_hole") return;
+  betCtx: { maxFacingBefore: number; streetBefore: number[] },
+): string {
+  const action = normalizeActionKey(e.action || "");
+  if (action === "deal_board" || action === "deal_hole") return "";
 
   const si = e.seat_index;
-  if (si == null || si < 0 || si >= seatCount) return;
+  if (si == null || si < 0 || si >= seatCount) return "";
 
   const chipsLine = formatActionChipsLine(e.chips, potAfter, bbUnit);
-  const labelZh = actionLabelZh(action);
-  if (!labelZh) return;
+  const labelZh = resolveActionDisplayLabel(e, betCtx);
+  if (!labelZh) return "";
 
   const st = normStreet(e.street);
 
   if (action === "fold" || action === "check") {
     trails[si].push({ labelZh, street: st });
-    return;
+    return labelZh;
   }
 
   trails[si].push({
@@ -311,6 +364,7 @@ function recordPlayerActionTrail(
     street: st,
     ...(chipsLine != null ? { chipsLine } : {}),
   });
+  return labelZh;
 }
 
 /** 顶部解说条：本步含筹码时在下一行展示 */
@@ -320,7 +374,7 @@ function formatStepHeadlineChips(
   bbUnit: number,
 ): string {
   if (!e) return "";
-  const action = (e.action || "").toLowerCase();
+  const action = normalizeActionKey(e.action || "");
   if (
     !isWagerAction(action) &&
     !["call", "post", "straddle", "sb", "bb", "small_blind", "big_blind", "ante"].includes(
@@ -416,12 +470,17 @@ export function computeReplaySnapshot(
   const bbUnit = inferBigBlindUnit(blindsMerged);
 
   const maxStep = Math.min(step, timeline.length - 1);
+  let stepActionZh = "";
   for (let i = 0; i <= maxStep; i++) {
     const e = timeline[i];
     street = normStreet(e.street);
-    const act = (e.action || "").toLowerCase();
+    const action = normalizeActionKey(e.action || "");
+    const betCtx = {
+      maxFacingBefore: maxFacingRef.v,
+      streetBefore: [...streetBets],
+    };
 
-    if (act === "deal_board") {
+    if (action === "deal_board") {
       streetBets.fill(0);
       maxFacingRef.v = 0;
       /* handBets 保留，界面「注」为整手累计 */
@@ -440,7 +499,7 @@ export function computeReplaySnapshot(
       continue;
     }
 
-    switch (act) {
+    switch (action) {
       case "deal_hole": {
         if (e.seat_index != null && e.cards) {
           const codes = unicodeCardsToCodes(e.cards);
@@ -456,12 +515,37 @@ export function computeReplaySnapshot(
         }
         break;
       }
+      case "showdown": {
+        if (e.seat_index != null && e.cards) {
+          const codes = unicodeCardsToCodes(e.cards);
+          if (codes.length >= 2 && e.seat_index >= 0 && e.seat_index < seatCount) {
+            holes[e.seat_index] = [codes[0], codes[1]];
+          }
+        }
+        break;
+      }
       default:
         applyChipsAction(e, streetBets, handBets, potRef, maxFacingRef, seatCount);
         break;
     }
 
-    recordPlayerActionTrail(e, playerActionTrail, seatCount, potRef.v, bbUnit);
+    const trailLabel = recordPlayerActionTrail(
+      e,
+      playerActionTrail,
+      seatCount,
+      potRef.v,
+      bbUnit,
+      betCtx,
+    );
+    if (i === maxStep) {
+      if (trailLabel) {
+        stepActionZh = trailLabel;
+      } else if (action === "deal_hole") {
+        stepActionZh = actionLabelZh("deal_hole");
+      } else if (action === "deal_board") {
+        stepActionZh = actionLabelZh("deal_board");
+      }
+    }
   }
 
   const last = timeline[maxStep];
@@ -470,7 +554,6 @@ export function computeReplaySnapshot(
       ? last.seat_index
       : null;
   const stepActionKey = last?.action ?? "";
-  const stepActionZh = actionLabelZh((last?.action ?? "").toLowerCase());
   const stepSeatName = last?.seat_name ?? "";
   const stepDetailText = last?.text ?? "";
   const stepHeadlineChips = formatStepHeadlineChips(last, potRef.v, bbUnit);
