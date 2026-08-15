@@ -7,9 +7,17 @@
  */
 const REMOTE_COMMENTARY_BASE = "http://127.0.0.1:9000/v1/commentary2";
 
+function h5OriginRootApiUrl(path: string): string {
+  const normalized = path.startsWith("/") ? path : `/${path}`;
+  if (typeof location !== "undefined" && location.origin) {
+    return `${location.origin}${normalized}`;
+  }
+  return normalized;
+}
+
 export const COMMENTARY_API_URL: string =
   typeof import.meta !== "undefined" && import.meta.env?.DEV
-    ? "/v1/commentary2"
+    ? h5OriginRootApiUrl("/v1/commentary2")
     : REMOTE_COMMENTARY_BASE;
 
 /** 开发用：列表名称 k（目前仅 all） */

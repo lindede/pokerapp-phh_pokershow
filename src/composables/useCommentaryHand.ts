@@ -283,12 +283,23 @@ let VOICE_LIST_API_URL: string;
 let VOICE_DATA_API_URL: string;
 let EQUITY_API_URL: string;
 // #ifdef H5
+/**
+ * H5 部署在任意子目录（如 /ps/）时，uni InnerAudioContext 会对 `/path` 走 getRealPath，
+ * 拼成 `/ps/path`；须用 `origin + /vN/...` 的绝对 URL 才能始终打站点根上的 API。
+ */
+function h5OriginRootApiUrl(path: string): string {
+  const normalized = path.startsWith("/") ? path : `/${path}`;
+  if (typeof location !== "undefined" && location.origin) {
+    return `${location.origin}${normalized}`;
+  }
+  return normalized;
+}
 /** H5 开发 / 生产均走同源 /v1、/v2（开发靠 Vite 代理，生产靠 Nginx 反代） */
-COMMENTARY_API_URL = "/v1/CommentaryLite";
-COMMENTARY_DATA_API_URL = "/v2/Commentary/data";
-VOICE_LIST_API_URL = "/v2/Commentary/voice/list";
-VOICE_DATA_API_URL = "/v2/Commentary/voice/data";
-EQUITY_API_URL = "/v2/Commentary/additional/equity";
+COMMENTARY_API_URL = h5OriginRootApiUrl("/v1/CommentaryLite");
+COMMENTARY_DATA_API_URL = h5OriginRootApiUrl("/v2/Commentary/data");
+VOICE_LIST_API_URL = h5OriginRootApiUrl("/v2/Commentary/voice/list");
+VOICE_DATA_API_URL = h5OriginRootApiUrl("/v2/Commentary/voice/data");
+EQUITY_API_URL = h5OriginRootApiUrl("/v2/Commentary/additional/equity");
 // #endif
 // #ifndef H5
 COMMENTARY_API_URL = "https://www.pokershow.top/v1/CommentaryLite";
