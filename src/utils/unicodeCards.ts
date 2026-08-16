@@ -12,21 +12,32 @@ const SUIT_MAP: Record<string, string> = {
 };
 
 /**
- * 从 "Q♥5♣"、"7♠9♣T♣"、"2♣" 等串中提取多张牌编码。
- * 支持点数 2–9、10、T、J、Q、K、A。
+ * 从牌串提取多张牌编码（如 Qh、Tc）。
+ * 支持：
+ * - Unicode：`Q♥5♣`、`7♠9♣T♣`
+ * - 标准编码连写：`AsKh`、`Td9c`（复盘录入发牌用）
  */
 export function unicodeCardsToCodes(human: string): string[] {
   if (!human || typeof human !== "string") return [];
   const s = human.trim();
+  if (!s) return [];
+
   const out: string[] = [];
-  const re = /(10|[2-9]|[TJQKA])([♠♥♦♣♤♡♢♧])/gi;
+  const unicodeRe = /(10|[2-9]|[TJQKA])([♠♥♦♣♤♡♢♧])/gi;
   let m: RegExpExecArray | null;
-  while ((m = re.exec(s)) !== null) {
+  while ((m = unicodeRe.exec(s)) !== null) {
     let rank = m[1].toUpperCase();
     if (rank === "10") rank = "T";
-    const suitSym = m[2];
-    const suit = SUIT_MAP[suitSym];
+    const suit = SUIT_MAP[m[2]];
     if (suit) out.push(`${rank}${suit}`);
+  }
+  if (out.length) return out;
+
+  const asciiRe = /(10|[2-9]|[TJQKA])([shdc])/gi;
+  while ((m = asciiRe.exec(s)) !== null) {
+    let rank = m[1].toUpperCase();
+    if (rank === "10") rank = "T";
+    out.push(`${rank}${m[2].toLowerCase()}`);
   }
   return out;
 }

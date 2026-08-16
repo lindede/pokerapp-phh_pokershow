@@ -7,6 +7,14 @@
 				"navigationStyle": "default",
 				"enablePullDownRefresh": false
 			}
+		},
+		{
+			"path": "pages/review/index",
+			"style": {
+				"navigationBarTitleText": "手牌复盘",
+				"navigationStyle": "default",
+				"enablePullDownRefresh": false
+			}
 		}
 	],
 	"globalStyle": {

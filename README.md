@@ -1,6 +1,6 @@
 # 博弈秀（phh-pokershow）
 
-德州扑克手牌解说与逐步回放前端。基于 **uni-app + Vue 3 + TypeScript**，一套代码支持 **H5**、**微信小程序** 等平台。
+德州扑克手牌解说与逐步回放前端。基于 **uni-app + Vue 3 + TypeScript**，一套代码支持 **H5**、**微信小程序** 等平台。另含 **用户录入复盘** 页：录入牌局后调用分析服务生成决策点评。
 
 ## 功能概览
 
@@ -8,6 +8,7 @@
 - **中文解说**：每步展示解说 headline / detail，步进时长随文案长度或语音时长调整
 - **语音解说**：对接 `/v2/Commentary/voice/*`，支持逐步播放与开关
 - **Hero 视角**：服务端 meta 含 `hero_seat_index` 时，Hero 常亮，他人发牌/弃牌快进
+- **用户复盘**：`/#/pages/review/index` 录入 Hero 牌与行动 → `POST /v2/Review/analyze`（后端说明见分析服务仓库 `docs/REVIEW.md`）
 - **稳定分享**：`meta.id` 支持 `k=all&id=` 链接（H5 / 小程序分享与首屏打开）
 - **胜率曲线**：对接 `/v2/Commentary/additional/equity` 展示各步胜率
 - **多布局模式**：竖屏、横屏（`ls=1`）、录屏嵌入（`m=rv`）等
@@ -90,6 +91,16 @@ http://localhost:5173/#/?k=all&i=5&m=rv&ls=1
 `k` 目前固定为 `all`（旧版形如 `v1_NLH_BB100_...` 的名称已废弃）。
 
 **说明**：应用内「上一局 / 下一局」仍用 `CommentaryLite` + `meta.i` 递增/递减；语音 list/data、胜率接口也仍绑定响应里的 `meta.i`。`id` 主要用于分享链接与带参首屏打开。
+
+## 用户复盘页
+
+```
+http://localhost:5173/#/pages/review/index
+```
+
+- 录入 Hero 座位、底牌、行动线（可粘贴 PHH 解析草稿）  
+- 「开始复盘」→ `POST /v2/Review/analyze`（见 `src/config/review-api.ts`）  
+- 逐步查看决策点评与摊牌总结  
 
 ## 分享链接（微信小程序）
 
