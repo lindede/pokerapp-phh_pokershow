@@ -6,6 +6,8 @@
 
 const REVIEW_ANALYZE_PATH = "/v2/Review/analyze";
 const REVIEW_PARSE_PHH_PATH = "/v2/Review/parse_phh";
+/** 多决策点 + 总结常需 4～5 分钟，须大于服务端 LLM 总耗时 */
+export const REVIEW_ANALYZE_TIMEOUT_MS = 360_000;
 const REMOTE_ORIGIN = "https://www.pokershow.top";
 
 function reviewAbsoluteUrl(path: string): string {
@@ -21,6 +23,11 @@ export function getReviewAnalyzeApiUrl(): string {
 
 export function getReviewParsePhhApiUrl(): string {
   return reviewAbsoluteUrl(REVIEW_PARSE_PHH_PATH);
+}
+
+export function getReviewArtifactApiUrl(artifactId: string): string {
+  const id = encodeURIComponent(artifactId.trim());
+  return reviewAbsoluteUrl(`/v2/Review/artifacts/${id}`);
 }
 
 /** 兼容常量读取；实际请求请优先用 getReviewAnalyzeApiUrl() */

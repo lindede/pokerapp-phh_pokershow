@@ -22,6 +22,13 @@ export interface ReviewActionChoice {
   label: string;
 }
 
+export interface ReviewBalanceLine {
+  /** 混合平衡下的另一合理动作（可与主推荐不同） */
+  alt?: ReviewActionChoice;
+  /** 诈唬 / 半诈唬 / 混合频率说明 */
+  notes: string[];
+}
+
 export interface HeroDecisionReview {
   event_index: number;
   /** decision=单点点评；summary=摊牌后整手总结 */
@@ -33,6 +40,8 @@ export interface HeroDecisionReview {
   verdict: ReviewVerdict;
   /** 中文理由 */
   reasons: string[];
+  /** 混合平衡视角（诈唬/半诈唬），与主点评并列 */
+  balance?: ReviewBalanceLine;
   /** 总结专用：摊牌输赢 */
   outcome?: "hero_won" | "hero_lost" | "chop" | "unknown";
   outcome_zh?: string;

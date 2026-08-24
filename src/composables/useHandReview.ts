@@ -1,6 +1,6 @@
 import { computed, reactive, ref } from "vue";
 import type { CommentaryReplayMeta, SeatPositionKey } from "@/types/commentary";
-import { getReviewAnalyzeApiUrl, getReviewParsePhhApiUrl } from "@/config/review-api";
+import { getReviewAnalyzeApiUrl, getReviewParsePhhApiUrl, getReviewArtifactApiUrl, REVIEW_ANALYZE_TIMEOUT_MS } from "@/config/review-api";
 import type {
   HeroDecisionReview,
   ReviewActionKind,
@@ -165,6 +165,7 @@ export function useHandReview(opts?: { useMock?: boolean }) {
   const errorMessage = ref("");
   const reviews = ref<HeroDecisionReview[]>([]);
   const reviewCursor = ref(0);
+  const analyzeWarnings = ref<string[]>([]);
 
   const cardPickerVisible = ref(false);
   /** hole = Hero 手牌；board = 发公牌；showdown = 对手摊牌 */
@@ -897,6 +898,7 @@ export function useHandReview(opts?: { useMock?: boolean }) {
     phase.value = "entry";
     reviews.value = [];
     reviewCursor.value = 0;
+    analyzeWarnings.value = [];
     errorMessage.value = "";
     cardPickerVisible.value = false;
     cardPickerMode.value = "hole";
@@ -932,6 +934,7 @@ export function useHandReview(opts?: { useMock?: boolean }) {
     phase.value = "entry";
     reviews.value = [];
     reviewCursor.value = 0;
+    analyzeWarnings.value = [];
     errorMessage.value = "";
     cardPickerVisible.value = false;
 
@@ -1014,11 +1017,77 @@ export function useHandReview(opts?: { useMock?: boolean }) {
     };
   }
 
+  function parseAnalyzeResponseBody(data: unknown): ReviewAnalyzeResponse | null {
+    if (data == null) return null;
+    let body: unknown = data;
+    if (typeof body === "string") {
+      try {
+        body = JSON.parse(body);
+      } catch {
+        return null;
+      }
+    }
+    if (typeof body !== "object" || body === null) return null;
+    const reviews = (body as ReviewAnalyzeResponse).reviews;
+    if (!Array.isArray(reviews) || reviews.length === 0) return null;
+    return body as ReviewAnalyzeResponse;
+  }
+
   function applyAnalyzeResponse(res: ReviewAnalyzeResponse) {
-    reviews.value = Array.isArray(res.reviews) ? res.reviews : [];
+    const list = Array.isArray(res.reviews) ? res.reviews : [];
+    if (!list.length) {
+      errorMessage.value = "分析结果为空，请重试或按产物 ID 加载";
+      uni.showToast({ title: errorMessage.value, icon: "none", duration: 2800 });
+      return;
+    }
+    reviews.value = list;
+    analyzeWarnings.value = Array.isArray(res.warnings) ? res.warnings : [];
     reviewCursor.value = 0;
     phase.value = "reviewing";
     errorMessage.value = "";
+    const hasBal = reviews.value.some((r) => (r.balance?.notes?.length ?? 0) > 0);
+    if (hasBal) {
+      uni.showToast({ title: "已加载点评（含平衡视角）", icon: "none", duration: 1500 });
+    } else {
+      uni.showToast({ title: "已加载点评", icon: "success", duration: 1200 });
+    }
+  }
+
+  function requestReviewJson(
+    url: string,
+    options: { method: "GET" | "POST"; data?: ReviewAnalyzeRequest },
+  ): Promise<ReviewAnalyzeResponse> {
+    return new Promise((resolve, reject) => {
+      uni.request({
+        url,
+        method: options.method,
+        data: options.data,
+        header:
+          options.method === "POST"
+            ? { "Content-Type": "application/json" }
+            : undefined,
+        timeout: REVIEW_ANALYZE_TIMEOUT_MS,
+        success: (res) => {
+          if (res.statusCode >= 200 && res.statusCode < 300) {
+            const body = parseAnalyzeResponseBody(res.data);
+            if (body) {
+              resolve(body);
+              return;
+            }
+            reject(new Error(`分析结果无效 HTTP ${res.statusCode ?? "?"}`));
+            return;
+          }
+          reject(new Error(`分析失败 HTTP ${res.statusCode ?? "?"}`));
+        },
+        fail: (err) => {
+          const msg =
+            err && typeof err === "object" && "errMsg" in err
+              ? String((err as { errMsg?: string }).errMsg ?? "网络错误")
+              : "网络错误";
+          reject(new Error(msg));
+        },
+      });
+    });
   }
 
   function startReview(): void {
@@ -1036,31 +1105,52 @@ export function useHandReview(opts?: { useMock?: boolean }) {
     }
     loading.value = true;
     errorMessage.value = "";
-    uni.request({
-      url: getReviewAnalyzeApiUrl(),
+    requestReviewJson(getReviewAnalyzeApiUrl(), {
       method: "POST",
       data: buildRequest(),
-      timeout: 180000,
-      success: (res) => {
-        if (res.statusCode >= 200 && res.statusCode < 300 && res.data != null) {
-          applyAnalyzeResponse(res.data as ReviewAnalyzeResponse);
-        } else {
-          errorMessage.value = `分析失败 HTTP ${res.statusCode ?? "?"}`;
-          uni.showToast({ title: errorMessage.value, icon: "none" });
-        }
-      },
-      fail: (err) => {
-        const msg =
-          err && typeof err === "object" && "errMsg" in err
-            ? String((err as { errMsg?: string }).errMsg ?? "网络错误")
-            : "网络错误";
-        errorMessage.value = msg;
-        uni.showToast({ title: msg, icon: "none" });
-      },
-      complete: () => {
+    })
+      .then((body) => {
+        applyAnalyzeResponse(body);
+      })
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : "网络错误";
+        const timedOut = /timeout|超时/i.test(msg);
+        errorMessage.value = timedOut
+          ? "分析超时（本手可能需 4～5 分钟）。若服务端已完成，可用产物 ID 加载结果。"
+          : msg;
+        uni.showToast({
+          title: timedOut ? "分析超时，可尝试加载产物" : msg.slice(0, 40),
+          icon: "none",
+          duration: timedOut ? 3200 : 2200,
+        });
+      })
+      .finally(() => {
         loading.value = false;
-      },
-    });
+      });
+  }
+
+  function loadReviewArtifact(artifactId: string): Promise<boolean> {
+    const id = (artifactId || "").trim();
+    if (!id) {
+      uni.showToast({ title: "请输入产物 ID", icon: "none" });
+      return Promise.resolve(false);
+    }
+    loading.value = true;
+    errorMessage.value = "";
+    return requestReviewJson(getReviewArtifactApiUrl(id), { method: "GET" })
+      .then((body) => {
+        applyAnalyzeResponse(body);
+        return true;
+      })
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : "加载失败";
+        errorMessage.value = msg;
+        uni.showToast({ title: msg.slice(0, 40), icon: "none" });
+        return false;
+      })
+      .finally(() => {
+        loading.value = false;
+      });
   }
 
   function goPrevDecision() {
@@ -1077,6 +1167,7 @@ export function useHandReview(opts?: { useMock?: boolean }) {
     phase.value = "entry";
     reviews.value = [];
     reviewCursor.value = 0;
+    analyzeWarnings.value = [];
     errorMessage.value = "";
     if (furthestStep.value === "showdown" || entryStep.value === "showdown") {
       entryStep.value = "showdown";
@@ -1099,6 +1190,7 @@ export function useHandReview(opts?: { useMock?: boolean }) {
     errorMessage,
     reviews,
     reviewCursor,
+    analyzeWarnings,
     heroDecisionIndices,
     heroCardsReady,
     canGoPrev,
@@ -1148,6 +1240,7 @@ export function useHandReview(opts?: { useMock?: boolean }) {
     restartEntry,
     importFromPhh,
     startReview,
+    loadReviewArtifact,
     goPrevDecision,
     goNextDecision,
     backToEntry,

@@ -15,6 +15,23 @@
 				"navigationStyle": "default",
 				"enablePullDownRefresh": false
 			}
+		},
+		{
+			"path": "pages/profile/index",
+			"style": {
+				"navigationBarTitleText": "我的",
+				"navigationStyle": "default",
+				"enablePullDownRefresh": false
+			}
+		},
+		{
+			"path": "pages/review-lab/index",
+			"style": {
+				"navigationBarTitleText": "复盘实验室",
+				"navigationStyle": "default",
+				"enablePullDownRefresh": false,
+				"disableScroll": true
+			}
 		}
 	],
 	"globalStyle": {

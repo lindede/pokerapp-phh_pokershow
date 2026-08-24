@@ -92,11 +92,15 @@
 
         <view class="panel panel-work">
           <text class="work-head">{{ stepHeadline }}</text>
+          <text v-if="errorMessage" class="warn-line">{{ errorMessage }}</text>
 
           <template v-if="phase === 'entry' && entryStep === 'hero_seat'">
             <text class="work-body">点击列表行选择 Hero 座位，选完自动进入选手牌。</text>
             <view class="street-advance" :class="{ 'street-advance--busy': loading }" @tap="openPastePhh">
               <text class="street-advance-txt">粘贴 PHH 导入</text>
+            </view>
+            <view class="street-advance" :class="{ 'street-advance--busy': loading }" @tap="openArtifactLoad">
+              <text class="street-advance-txt">按产物 ID 加载点评</text>
             </view>
           </template>
 
@@ -158,6 +162,13 @@
             >
           </template>
 
+          <template v-else-if="phase === 'reviewing' && !currentReview">
+            <text class="work-body"
+              >点评未加载（共 {{ reviews.length }} 条）。若分析已在服务端完成，请用「按产物 ID
+              加载点评」。</text
+            >
+          </template>
+
           <template v-else-if="phase === 'reviewing' && currentReview">
             <view class="review-head-row">
               <text
@@ -169,6 +180,9 @@
                 >{{ reviewCursor + 1 }} / {{ reviews.length }}</text
               >
             </view>
+            <text v-if="analyzeWarnings.length" class="warn-line">{{
+              analyzeWarnings.join("；")
+            }}</text>
             <template v-if="currentReview.kind === 'summary'">
               <text class="actual-line">整手总结</text>
               <text
@@ -202,6 +216,20 @@
                 >
               </view>
             </template>
+            <view v-if="currentReview.balance?.notes?.length" class="balance-block">
+              <text class="balance-head">平衡视角（混合 / 诈唬）</text>
+              <text
+                v-if="currentReview.balance.alt?.label"
+                class="balance-alt-line"
+                >混合可选 {{ currentReview.balance.alt.label }}</text
+              >
+              <text
+                v-for="(b, j) in currentReview.balance.notes"
+                :key="'bal-' + j"
+                class="balance-line"
+                >{{ b }}</text
+              >
+            </view>
             <text
               v-for="(r, i) in currentReview.reasons"
               :key="'reason-' + i"
@@ -242,6 +270,37 @@
           @tap="confirmPastePhh"
         >
           导入牌谱
+        </button>
+      </view>
+    </view>
+
+    <view
+      v-if="artifactLoadVisible"
+      class="picker-mask"
+      @tap="closeArtifactLoad"
+    >
+      <view class="picker-sheet paste-phh-sheet" @tap.stop>
+        <view class="picker-top">
+          <text class="picker-title">加载已有点评</text>
+          <text class="picker-close" @tap="closeArtifactLoad">关闭</text>
+        </view>
+        <text class="paste-phh-hint"
+          >输入落盘目录名（如
+          20260823010950_f47300219aa7d451acb3bf16），从服务端读取 review.json。</text
+        >
+        <textarea
+          class="paste-phh-area paste-phh-area--single"
+          v-model="artifactIdDraft"
+          placeholder="YYYYMMDDHHMMSS_xxxxxxxxxxxxxxxxxxxxxxxx"
+          :maxlength="64"
+        />
+        <button
+          class="picker-confirm"
+          :disabled="loading || !artifactIdDraft.trim()"
+          :loading="loading"
+          @tap="confirmArtifactLoad"
+        >
+          加载点评
         </button>
       </view>
     </view>
@@ -395,12 +454,15 @@
           返回录入
         </button>
       </template>
+      <AppTabBar active="review" />
+      <view class="dock-safe"></view>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
 import { computed, ref } from "vue";
+import AppTabBar from "@/components/AppTabBar.vue";
 import PokerCard from "@/components/PokerCard.vue";
 import { useHandReview } from "@/composables/useHandReview";
 import type { ReplayActionTrailItem, Street } from "@/types/commentary";
@@ -425,6 +487,8 @@ const suits = CARD_SUITS;
 
 const pastePhhVisible = ref(false);
 const pastePhhText = ref("");
+const artifactLoadVisible = ref(false);
+const artifactIdDraft = ref("");
 
 const {
   phase,
@@ -436,8 +500,10 @@ const {
   pendingShowdownSeat,
   amountDraft,
   loading,
+  errorMessage,
   reviews,
   reviewCursor,
+  analyzeWarnings,
   heroCardsReady,
   showdownCardsReady,
   canGoPrev,
@@ -479,6 +545,7 @@ const {
   requestReset,
   importFromPhh,
   startReview,
+  loadReviewArtifact,
   goPrevDecision,
   goNextDecision,
   backToEntry,
@@ -498,6 +565,19 @@ async function confirmPastePhh() {
     pastePhhVisible.value = false;
     pastePhhText.value = "";
   }
+}
+
+function openArtifactLoad() {
+  artifactLoadVisible.value = true;
+}
+
+function closeArtifactLoad() {
+  artifactLoadVisible.value = false;
+}
+
+async function confirmArtifactLoad() {
+  const ok = await loadReviewArtifact(artifactIdDraft.value);
+  if (ok) artifactLoadVisible.value = false;
 }
 
 const boardSlots = computed(() => {
@@ -656,6 +736,7 @@ $panel: rgba(255, 255, 255, 0.07);
 $panel-border: rgba(255, 255, 255, 0.14);
 $pot-yellow: #fbbf24;
 $dock-bg: rgba(15, 61, 38, 0.96);
+$tab-bar-h: 88rpx;
 
 .page-root {
   width: 100%;
@@ -676,7 +757,7 @@ $dock-bg: rgba(15, 61, 38, 0.96);
 
 .page-inner {
   padding: 16rpx 24rpx 0;
-  padding-bottom: calc(200rpx + env(safe-area-inset-bottom));
+  padding-bottom: calc(200rpx + #{$tab-bar-h} + env(safe-area-inset-bottom));
 }
 
 .panel {
@@ -1084,12 +1165,54 @@ $dock-bg: rgba(15, 61, 38, 0.96);
   color: #bbf7d0;
 }
 
+.review-progress {
+  font-size: 24rpx;
+  color: #94a3b8;
+}
+
+.warn-line {
+  display: block;
+  font-size: 22rpx;
+  color: #fcd34d;
+  line-height: 1.45;
+  margin-bottom: 10rpx;
+}
+
 .reason-line {
   display: block;
   font-size: 26rpx;
   color: #cbd5e1;
   line-height: 1.55;
   margin-bottom: 8rpx;
+}
+
+.balance-block {
+  margin: 12rpx 0 16rpx;
+  padding: 12rpx 0;
+  border-top: 1rpx solid rgba(148, 163, 184, 0.35);
+  border-bottom: 1rpx solid rgba(148, 163, 184, 0.35);
+}
+
+.balance-head {
+  display: block;
+  font-size: 24rpx;
+  color: #93c5fd;
+  margin-bottom: 8rpx;
+}
+
+.balance-alt-line {
+  display: block;
+  font-size: 24rpx;
+  color: #a5b4fc;
+  margin-bottom: 6rpx;
+}
+
+.balance-line {
+  display: block;
+  font-size: 24rpx;
+  color: #94a3b8;
+  line-height: 1.5;
+  margin-bottom: 6rpx;
 }
 
 .scroll-pad {
@@ -1136,6 +1259,11 @@ $dock-bg: rgba(15, 61, 38, 0.96);
   font-size: 24rpx;
   line-height: 1.45;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.paste-phh-area--single {
+  min-height: 96rpx;
+  max-height: 120rpx;
 }
 
 .street-advance--busy {
@@ -1317,5 +1445,9 @@ $dock-bg: rgba(15, 61, 38, 0.96);
 
 .dock-btn--ghost[disabled] {
   opacity: 0.35;
+}
+
+.dock-safe {
+  height: 4rpx;
 }
 </style>

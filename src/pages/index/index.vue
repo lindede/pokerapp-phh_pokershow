@@ -183,6 +183,7 @@
           v-if="narrationVisible || isLandscapeMode"
           class="narration-block"
           :class="{ 'narration-block--ls': isLandscapeMode }"
+          :style="narrationBlockStyle"
           @touchstart="onNarrationTouchStart"
           @touchmove="onNarrationTouchMove"
           @touchend="onNarrationTouchEnd"
@@ -206,8 +207,10 @@
                     <text class="nar-step-glyph">›</text>
                   </view>
                 </view>
-              <text v-if="state.replayDetailText" class="nar-body" user-select>{{ state.replayDetailText }}</text>
-              <text v-else class="nar-body nar-muted">此步无解说正文</text>
+              <view class="nar-body-wrap" :style="narBodyWrapStyle">
+                <text v-if="state.replayDetailText" class="nar-body" user-select>{{ state.replayDetailText }}</text>
+                <text v-else class="nar-body nar-muted">此步无解说正文</text>
+              </view>
             </template>
             <template v-else>
               <text v-if="state.serverSummary" class="nar-summary" user-select>{{ state.serverSummary }}</text>
@@ -376,6 +379,7 @@
         </view>
       </view>
 
+      <AppTabBar v-if="!isLandscapeMode" active="commentary" />
       <view class="dock-safe"></view>
     </view>
   </view>
@@ -388,9 +392,11 @@ import { isPcH5Browser } from "@/utils/platform";
 import { onLoad, onShareAppMessage } from "@dcloudio/uni-app";
 // #endif
 import LaunchIntroModal from "@/components/LaunchIntroModal.vue";
+import AppTabBar from "@/components/AppTabBar.vue";
 import PokerCard from "@/components/PokerCard.vue";
 import { useCommentaryHand } from "@/composables/useCommentaryHand";
 import { boardIndicesForDealBoardStep } from "@/utils/replayByAction";
+import { APP_TAB_BAR_HEIGHT_RPX } from "@/config/app-tab-bar";
 import { getWindowMetrics } from "@/utils/layout";
 import {
   applyDefaultH5Viewport,
@@ -560,13 +566,26 @@ function onTapNextAction() {
 
 /** 小程序 scroll-view 必须明确高度（px），不能用 H5 的 flex+height:0 */
 const scrollHeightPx = ref(0);
+/** 竖屏解说区最小高度（px），避免步进切换时区域忽大忽小 */
+const narrationBlockMinHeightPx = ref(0);
+const narBodyWrapMinHeightPx = ref(0);
 const scrollViewStyle = computed(() =>
   scrollHeightPx.value > 0 ? { height: `${scrollHeightPx.value}px` } : {},
 );
+const narrationBlockStyle = computed(() => {
+  if (isLandscapeMode.value || narrationBlockMinHeightPx.value <= 0) return {};
+  return { minHeight: `${narrationBlockMinHeightPx.value}px` };
+});
+const narBodyWrapStyle = computed(() => {
+  if (isLandscapeMode.value || narBodyWrapMinHeightPx.value <= 0) return {};
+  return { minHeight: `${narBodyWrapMinHeightPx.value}px` };
+});
 
 function updateScrollHeight() {
   const sys = getWindowMetrics();
-  const dockRpx = skipIntroModal ? 0 : 150;
+  const dockRpx = skipIntroModal
+    ? 0
+    : 150 + APP_TAB_BAR_HEIGHT_RPX;
   const dockPx = (dockRpx * sys.windowWidth) / 750;
   if (isLandscapeMode.value) {
     const pageH = Math.min(
@@ -575,9 +594,19 @@ function updateScrollHeight() {
       (sys.windowWidth * 9) / 16,
     );
     scrollHeightPx.value = Math.max(200, Math.floor(pageH - dockPx));
+    narrationBlockMinHeightPx.value = 0;
+    narBodyWrapMinHeightPx.value = 0;
     return;
   }
   scrollHeightPx.value = Math.max(200, Math.floor(sys.windowHeight - dockPx));
+  // 牌桌区（底池+公牌+玩家列表）约占高度；解说区吃掉剩余可视区域
+  const tableReservedPx = Math.round((620 * sys.windowWidth) / 750);
+  const narrMin = Math.max(
+    220,
+    Math.floor(scrollHeightPx.value - tableReservedPx),
+  );
+  narrationBlockMinHeightPx.value = narrMin;
+  narBodyWrapMinHeightPx.value = Math.max(180, narrMin - 52);
 }
 
 function scheduleRemoteLoad(mpLaunch?: ReturnType<typeof parseMpLaunchOptions>) {
@@ -984,6 +1013,14 @@ $ls-top-row-gap: 10rpx;
 
 .ls-layout--row .panel-narration-fill {
   min-height: 0;
+  height: 100%;
+}
+
+.ls-layout--row .nar-body-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .ls-layout--row .panel-players,
@@ -1537,6 +1574,9 @@ $ls-top-row-gap: 10rpx;
 
 .narration-block {
   margin-bottom: 16rpx;
+  display: flex;
+  flex-direction: column;
+  min-height: 220rpx;
 }
 
 .nar-head-row {
@@ -1549,15 +1589,22 @@ $ls-top-row-gap: 10rpx;
 
 .nar-step-hit {
   flex-shrink: 0;
-  width: 56rpx;
-  min-height: 44rpx;
+  width: 96rpx;
+  min-width: 96rpx;
+  min-height: 96rpx;
+  padding: 12rpx 8rpx;
+  margin: -8rpx -4rpx;
   align-items: center;
   justify-content: center;
   display: flex;
+  box-sizing: border-box;
+  background: rgba(56, 189, 248, 0.14);
+  border: 1rpx solid rgba(56, 189, 248, 0.35);
+  border-radius: 16rpx;
 }
 
 .nar-step-glyph {
-  font-size: 40rpx;
+  font-size: 48rpx;
   font-weight: 700;
   color: #38bdf8;
   line-height: 1;
@@ -1616,7 +1663,17 @@ $ls-top-row-gap: 10rpx;
 
 .panel-narration-fill {
   margin-bottom: 0;
-  min-height: 120rpx;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 220rpx;
+  box-sizing: border-box;
+}
+
+.nar-body-wrap {
+  flex: 1;
+  min-height: 180rpx;
+  box-sizing: border-box;
 }
 
 .nar-muted {
