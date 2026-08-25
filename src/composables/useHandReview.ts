@@ -1,6 +1,7 @@
 import { computed, reactive, ref } from "vue";
 import type { CommentaryReplayMeta, SeatPositionKey } from "@/types/commentary";
 import { getReviewAnalyzeApiUrl, getReviewParsePhhApiUrl, getReviewArtifactApiUrl, REVIEW_ANALYZE_TIMEOUT_MS } from "@/config/review-api";
+import { authHeaders } from "@/composables/useAuth";
 import type {
   HeroDecisionReview,
   ReviewActionKind,
@@ -1064,8 +1065,8 @@ export function useHandReview(opts?: { useMock?: boolean }) {
         data: options.data,
         header:
           options.method === "POST"
-            ? { "Content-Type": "application/json" }
-            : undefined,
+            ? { "Content-Type": "application/json", ...authHeaders() }
+            : { ...authHeaders() },
         timeout: REVIEW_ANALYZE_TIMEOUT_MS,
         success: (res) => {
           if (res.statusCode >= 200 && res.statusCode < 300) {
@@ -1075,6 +1076,16 @@ export function useHandReview(opts?: { useMock?: boolean }) {
               return;
             }
             reject(new Error(`分析结果无效 HTTP ${res.statusCode ?? "?"}`));
+            return;
+          }
+          if (res.statusCode === 402) {
+            const body = res.data as { detail?: { balance?: number; required?: number } | string };
+            const d = body?.detail;
+            const msg =
+              typeof d === "object" && d?.required != null
+                ? `信用不足（需要 ${d.required}，当前 ${d.balance ?? 0}）`
+                : "信用不足，请到「我」充值或兑换卡密";
+            reject(new Error(msg));
             return;
           }
           reject(new Error(`分析失败 HTTP ${res.statusCode ?? "?"}`));

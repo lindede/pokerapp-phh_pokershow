@@ -260,7 +260,7 @@
         <textarea
           class="paste-phh-area"
           v-model="pastePhhText"
-          placeholder="hero_seat = 1&#10;variant = 'NT'&#10;actions = [...]"
+          placeholder="粘贴 PHH 全文，例如 hero_seat = 1 ..."
           :maxlength="-1"
         />
         <button

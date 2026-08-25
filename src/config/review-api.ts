@@ -1,33 +1,26 @@
 /**
  * 复盘分析 / 粘贴 PHH 接口。
- * H5 用 `location.origin` 拼绝对 URL，避免部署在子目录时路径被当成相对路径；
- * 开发时 Vite 将 `/v2` 代理到 9000。
+ * 开发时 Vite 将 `/v2` 代理到 9000；生产请求 api.pokershow.top。
  */
+
+import { apiAbsoluteUrl } from "@/config/api-origin";
 
 const REVIEW_ANALYZE_PATH = "/v2/Review/analyze";
 const REVIEW_PARSE_PHH_PATH = "/v2/Review/parse_phh";
 /** 多决策点 + 总结常需 4～5 分钟，须大于服务端 LLM 总耗时 */
 export const REVIEW_ANALYZE_TIMEOUT_MS = 360_000;
-const REMOTE_ORIGIN = "https://www.pokershow.top";
-
-function reviewAbsoluteUrl(path: string): string {
-  if (typeof location !== "undefined" && location.origin) {
-    return `${location.origin}${path}`;
-  }
-  return `${REMOTE_ORIGIN}${path}`;
-}
 
 export function getReviewAnalyzeApiUrl(): string {
-  return reviewAbsoluteUrl(REVIEW_ANALYZE_PATH);
+  return apiAbsoluteUrl(REVIEW_ANALYZE_PATH);
 }
 
 export function getReviewParsePhhApiUrl(): string {
-  return reviewAbsoluteUrl(REVIEW_PARSE_PHH_PATH);
+  return apiAbsoluteUrl(REVIEW_PARSE_PHH_PATH);
 }
 
 export function getReviewArtifactApiUrl(artifactId: string): string {
   const id = encodeURIComponent(artifactId.trim());
-  return reviewAbsoluteUrl(`/v2/Review/artifacts/${id}`);
+  return apiAbsoluteUrl(`/v2/Review/artifacts/${id}`);
 }
 
 /** 兼容常量读取；实际请求请优先用 getReviewAnalyzeApiUrl() */

@@ -1,24 +1,11 @@
 /**
  * 解说接口路径（不含 query）。请求示例：
  * `{COMMENTARY_API_URL}?k=all&i=2`
- *
- * - **H5 开发**（`npm run dev`）：使用 `/v1/commentary2`，由 Vite 代理到 127.0.0.1:9000，避免 CORS。
- * - **发行 / 小程序**：使用下方完整 URL（本机服务需可访问；小程序需配合法域名或真机调试用内网穿透）。
  */
-const REMOTE_COMMENTARY_BASE = "http://127.0.0.1:9000/v1/commentary2";
 
-function h5OriginRootApiUrl(path: string): string {
-  const normalized = path.startsWith("/") ? path : `/${path}`;
-  if (typeof location !== "undefined" && location.origin) {
-    return `${location.origin}${normalized}`;
-  }
-  return normalized;
-}
+import { apiAbsoluteUrl } from "@/config/api-origin";
 
-export const COMMENTARY_API_URL: string =
-  typeof import.meta !== "undefined" && import.meta.env?.DEV
-    ? h5OriginRootApiUrl("/v1/commentary2")
-    : REMOTE_COMMENTARY_BASE;
+export const COMMENTARY_API_URL: string = apiAbsoluteUrl("/v1/commentary2");
 
 /** 开发用：列表名称 k（目前仅 all） */
 export const DEV_COMMENTARY_DATASET_KEY = "all";

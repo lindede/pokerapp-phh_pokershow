@@ -21,6 +21,11 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           secure: true,
         },
+        "/v3": {
+          target: devProxyTarget,
+          changeOrigin: true,
+          secure: true,
+        },
       },
     },
   };
