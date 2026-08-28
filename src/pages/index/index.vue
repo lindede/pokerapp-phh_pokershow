@@ -28,6 +28,7 @@
                 <text class="pot-text">底池 {{ state.pot }}</text>
               </view>
               <text v-if="blindsLevelText" class="blinds-level">{{ blindsLevelText }}</text>
+              <text v-if="bbRealAnchorText" class="bb-real-anchor">{{ bbRealAnchorText }}</text>
             </view>
             <view class="community-row">
               <PokerCard
@@ -396,6 +397,7 @@ import AppTabBar from "@/components/AppTabBar.vue";
 import PokerCard from "@/components/PokerCard.vue";
 import { useCommentaryHand } from "@/composables/useCommentaryHand";
 import { boardIndicesForDealBoardStep } from "@/utils/replayByAction";
+import { formatBbRealAnchor } from "@/utils/chipScale";
 import { APP_TAB_BAR_HEIGHT_RPX } from "@/config/app-tab-bar";
 import { getWindowMetrics } from "@/utils/layout";
 import {
@@ -778,6 +780,10 @@ const blindsLevelText = computed(() => {
   }
   return "";
 });
+
+const bbRealAnchorText = computed(() =>
+  formatBbRealAnchor(state.replayMeta?.bbReal),
+);
 
 /** 回放未到最后一手动作时不展示 WINS，避免中途提前剧透 */
 const replayShowWinnerWinsTag = computed(() => {
@@ -1452,6 +1458,12 @@ $ls-top-row-gap: 10rpx;
   font-size: 34rpx;
 }
 
+.page-root--ls .bb-real-anchor {
+  color: $ls-text-muted;
+  font-size: 28rpx;
+  opacity: 0.9;
+}
+
 .page-root--ls .p-name {
   font-size: 40rpx;
 }
@@ -1745,6 +1757,14 @@ $ls-top-row-gap: 10rpx;
   font-weight: 600;
   color: rgba(226, 232, 240, 0.88);
   letter-spacing: 0.04em;
+  padding-left: 2rpx;
+}
+
+.bb-real-anchor {
+  font-size: 18rpx;
+  font-weight: 500;
+  color: rgba(148, 163, 184, 0.92);
+  letter-spacing: 0.02em;
   padding-left: 2rpx;
 }
 

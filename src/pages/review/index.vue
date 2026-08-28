@@ -11,6 +11,9 @@
               <text v-if="blindsLevelText" class="blinds-level">{{
                 blindsLevelText
               }}</text>
+              <text v-if="bbRealAnchorText" class="bb-real-anchor">{{
+                bbRealAnchorText
+              }}</text>
               <text class="street-tag">{{ streetZh }}</text>
             </view>
             <view class="community-row">
@@ -518,6 +521,7 @@ const {
   snapshot,
   tablePlayers,
   blindsLevelText,
+  bbRealAnchorText,
   streetZh,
   stepHeadline,
   nextActorSeat,
@@ -810,6 +814,12 @@ $tab-bar-h: 88rpx;
   font-size: 20rpx;
   font-weight: 600;
   color: rgba(226, 232, 240, 0.88);
+}
+
+.bb-real-anchor {
+  font-size: 18rpx;
+  font-weight: 500;
+  color: rgba(148, 163, 184, 0.92);
 }
 
 .street-tag {

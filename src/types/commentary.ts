@@ -39,7 +39,14 @@ export interface CommentaryReplayMeta {
   finishingStacks: number[];
   /** 与各座位对齐：盲注 / straddle 等量，用于起手底池与本街初始下注展示 */
   blindsOrStraddles?: number[];
+  /** 源面值→整数筹码放大倍数；缺省 1 */
+  chipScale?: number;
+  /**
+   * 真实大盲面值（仅 chipScale>1 时有）；C 端显示「1bb = …」，不带货币符号。
+   */
+  bbReal?: number | null;
 }
+
 
 export interface PlayerPayload {
   id?: string;

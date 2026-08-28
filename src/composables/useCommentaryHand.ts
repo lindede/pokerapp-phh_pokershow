@@ -10,6 +10,7 @@ import type {
 } from "@/types/commentary";
 import type { EquityByActionEvent } from "@/types/commentaryEquity";
 import { adaptCommentaryResponse } from "@/utils/commentary2Adapter";
+import { cloneReplayMeta } from "@/utils/chipScale";
 import {
   adaptEquityResponse,
   buildEquityStepView,
@@ -1129,15 +1130,7 @@ export function useCommentaryHand() {
         text: x.text,
       })),
       byActionTimeline: state.byActionTimeline.map((e) => ({ ...e })),
-      replayMeta: state.replayMeta
-        ? {
-            startingStacks: [...state.replayMeta.startingStacks],
-            finishingStacks: [...state.replayMeta.finishingStacks],
-            blindsOrStraddles: state.replayMeta.blindsOrStraddles
-              ? [...state.replayMeta.blindsOrStraddles]
-              : undefined,
-          }
-        : null,
+      replayMeta: cloneReplayMeta(state.replayMeta),
     };
   }
 
@@ -1196,15 +1189,7 @@ export function useCommentaryHand() {
 
     if (payload.byActionTimeline != null && payload.byActionTimeline.length > 0) {
       state.byActionTimeline = payload.byActionTimeline.map((e) => ({ ...e }));
-      state.replayMeta = payload.replayMeta
-        ? {
-            startingStacks: [...payload.replayMeta.startingStacks],
-            finishingStacks: [...payload.replayMeta.finishingStacks],
-            blindsOrStraddles: payload.replayMeta.blindsOrStraddles
-              ? [...payload.replayMeta.blindsOrStraddles]
-              : undefined,
-          }
-        : null;
+      state.replayMeta = cloneReplayMeta(payload.replayMeta);
       recomputeReplayCumulative();
       state.replayElapsedMs = 0;
       state.replayStep = 0;
@@ -1502,13 +1487,7 @@ export function useCommentaryHand() {
     const tl = snap.byActionTimeline ?? [];
     if (tl.length > 0 && snap.replayMeta) {
       state.byActionTimeline = tl.map((e) => ({ ...e }));
-      state.replayMeta = {
-        startingStacks: [...snap.replayMeta.startingStacks],
-        finishingStacks: [...snap.replayMeta.finishingStacks],
-        blindsOrStraddles: snap.replayMeta.blindsOrStraddles
-          ? [...snap.replayMeta.blindsOrStraddles]
-          : undefined,
-      };
+      state.replayMeta = cloneReplayMeta(snap.replayMeta);
       state.players = clonePlayers(snap.players);
       recomputeReplayCumulative();
       state.replayElapsedMs = 0;

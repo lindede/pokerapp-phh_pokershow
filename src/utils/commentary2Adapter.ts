@@ -273,6 +273,14 @@ function parseStructuredCommentary(
   if (blindsParsed?.some((x) => x > 0)) {
     meta.blindsOrStraddles = blindsParsed;
   }
+  const chipScale = Number(comm.chip_scale);
+  if (Number.isFinite(chipScale) && chipScale >= 1) {
+    meta.chipScale = chipScale;
+  }
+  const bbReal = comm.bb_real;
+  if (bbReal != null && Number.isFinite(Number(bbReal)) && Number(bbReal) > 0) {
+    meta.bbReal = Number(bbReal);
+  }
 
   const finalSnap = computeReplaySnapshot(
     timeline,

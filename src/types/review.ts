@@ -71,6 +71,20 @@ export interface ReviewParsePhhResponse {
   blinds_or_straddles?: number[];
   by_action: ByActionEvent[];
   warnings?: string[];
+  chip_scale?: number;
+  bb_real?: number | null;
+}
+
+export interface ReviewHandListItem {
+  artifact_id: string;
+  title: string;
+  created_at_local?: string | null;
+  hero_seat?: number | null;
+  has_review?: boolean;
+}
+
+export interface ReviewHandListResponse {
+  items: ReviewHandListItem[];
 }
 
 /** 录入态草稿（完整或前缀时间线） */
@@ -79,6 +93,8 @@ export interface ReviewHandDraft {
   startingStacks: number[];
   blindsOrStraddles: number[];
   byAction: ByActionEvent[];
+  chipScale?: number;
+  bbReal?: number | null;
 }
 
 /** 视为 Hero「决策点」的动作（用于 canStartReview / 步进） */

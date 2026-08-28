@@ -13,6 +13,7 @@ import type {
   ReviewVerdict,
 } from "@/types/review";
 import { HERO_DECISION_ACTION_KEYS } from "@/types/review";
+import { formatBbRealAnchor } from "@/utils/chipScale";
 import {
   computeReplaySnapshot,
   type ReplaySnapshot,
@@ -95,6 +96,8 @@ function createEmptyDraft(): ReviewHandDraft {
     ),
     blindsOrStraddles: [DEFAULT_SB, DEFAULT_BB, 0, 0, 0, 0],
     byAction: [],
+    chipScale: 1,
+    bbReal: null,
   };
 }
 
@@ -259,6 +262,8 @@ export function useHandReview(opts?: { useMock?: boolean }) {
     startingStacks: [...draft.startingStacks],
     finishingStacks: [...draft.startingStacks],
     blindsOrStraddles: [...draft.blindsOrStraddles],
+    chipScale: draft.chipScale ?? 1,
+    bbReal: draft.bbReal ?? null,
   }));
 
   const tableStepIndex = computed(() => {
@@ -381,6 +386,8 @@ export function useHandReview(opts?: { useMock?: boolean }) {
     if (!sb && !bb) return "";
     return `${sb}/${bb}`;
   });
+
+  const bbRealAnchorText = computed(() => formatBbRealAnchor(draft.bbReal));
 
   const streetZh = computed(() => {
     const map: Record<string, string> = {
@@ -921,6 +928,15 @@ export function useHandReview(opts?: { useMock?: boolean }) {
     );
     draft.startingStacks = stacks.slice(0, REVIEW_SEAT_COUNT);
     draft.blindsOrStraddles = blinds.slice(0, REVIEW_SEAT_COUNT);
+    const scale = Number(res.chip_scale);
+    draft.chipScale =
+      Number.isFinite(scale) && scale >= 1 ? Math.floor(scale) : 1;
+    draft.bbReal =
+      res.bb_real != null &&
+      Number.isFinite(Number(res.bb_real)) &&
+      Number(res.bb_real) > 0
+        ? Number(res.bb_real)
+        : null;
     draft.byAction = Array.isArray(res.by_action)
       ? res.by_action.map((e) => ({ ...e }))
       : [];
@@ -1217,6 +1233,7 @@ export function useHandReview(opts?: { useMock?: boolean }) {
     snapshot,
     tablePlayers,
     blindsLevelText,
+    bbRealAnchorText,
     streetZh,
     stepHeadline,
     nextActorSeat,
