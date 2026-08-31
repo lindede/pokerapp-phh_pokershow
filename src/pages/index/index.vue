@@ -331,58 +331,121 @@
       </view>
     </scroll-view>
 
-    <view v-if="!skipIntroModal" class="dock" :class="{ 'dock--ls': isLandscapeMode }">
-      <text v-if="!isMpWeixin" class="icp-record" @tap="openBeianLink">琼ICP备2026007033号</text>
-      <view class="replay-dock">
-        <view class="replay-row">
-          <text
-            class="nav-hand"
-            :class="{ 'nav-disabled': state.loading }"
-            @tap="onTapPrevHand"
-          >上一局</text>
-          <view class="replay-center">
-            <view v-if="replayActive" class="replay-controls">
-              <view class="play-toggle" @tap="toggleReplayPlay">
-                <text class="play-glyph">{{ state.replayPlaying ? "⏸" : "▶" }}</text>
+    <template v-if="!skipIntroModal">
+      <AppTabBar v-if="!isLandscapeMode" active="commentary">
+        <view class="replay-dock">
+          <view class="replay-row">
+            <text
+              class="nav-hand"
+              :class="{ 'nav-disabled': state.loading }"
+              @tap="onTapPrevHand"
+            >上一局</text>
+            <view class="replay-center">
+              <view v-if="replayActive" class="replay-controls">
+                <view class="dock-icon-btn play-toggle" @tap="toggleReplayPlay">
+                  <ReplayPlayIcon :playing="state.replayPlaying" />
+                </view>
+                <slider
+                  class="replay-slider"
+                  :value="replaySliderPercent"
+                  :activeColor="replaySliderActiveColor"
+                  backgroundColor="#475569"
+                  block-color="#f8fafc"
+                  block-size="14"
+                  @changing="onReplaySliderChanging"
+                  @change="onReplaySliderChange"
+                ></slider>
+                <text class="replay-remain">{{ formatMs(replayRemainingMs) }}</text>
+                <view
+                  class="dock-icon-btn voice-toggle"
+                  :class="{ 'voice-toggle--off': !state.voiceOpen }"
+                  @tap="toggleVoiceOpen"
+                >
+                  <VoiceToggleIcon :open="state.voiceOpen" />
+                </view>
               </view>
-              <slider
-                class="replay-slider"
-                :value="replaySliderPercent"
-                :activeColor="replaySliderActiveColor"
-                backgroundColor="#475569"
-                block-color="#f8fafc"
-                block-size="14"
-                @changing="onReplaySliderChanging"
-                @change="onReplaySliderChange"
-              ></slider>
-              <text class="replay-remain">{{ formatMs(replayRemainingMs) }}</text>
+              <view
+                v-else
+                class="dock-icon-btn voice-toggle voice-toggle--solo"
+                :class="{ 'voice-toggle--off': !state.voiceOpen }"
+                @tap="toggleVoiceOpen"
+              >
+                <VoiceToggleIcon :open="state.voiceOpen" />
+              </view>
             </view>
+            <view
+              v-if="showPcOrientationToggle"
+              class="orient-toggle"
+              @tap="togglePcLayoutOrientation"
+            >
+              <text class="orient-glyph">{{ isLandscapeMode ? "竖屏" : "横屏" }}</text>
+            </view>
+            <text
+              class="nav-hand"
+              :class="{ 'nav-disabled': state.loading }"
+              @tap="onTapNextHand"
+            >下一局</text>
           </view>
-          <view
-            class="voice-toggle"
-            :class="{ 'voice-toggle--off': !state.voiceOpen }"
-            @tap="toggleVoiceOpen"
-          >
-            <text class="voice-glyph">{{ state.voiceOpen ? "🔊" : "🔇" }}</text>
-          </view>
-          <view
-            v-if="showPcOrientationToggle"
-            class="orient-toggle"
-            @tap="togglePcLayoutOrientation"
-          >
-            <text class="orient-glyph">{{ isLandscapeMode ? "竖屏" : "横屏" }}</text>
-          </view>
-          <text
-            class="nav-hand"
-            :class="{ 'nav-disabled': state.loading }"
-            @tap="onTapNextHand"
-          >下一局</text>
         </view>
+      </AppTabBar>
+      <view v-else class="dock dock--ls">
+        <view class="replay-dock">
+          <view class="replay-row">
+            <text
+              class="nav-hand"
+              :class="{ 'nav-disabled': state.loading }"
+              @tap="onTapPrevHand"
+            >上一局</text>
+            <view class="replay-center">
+              <view v-if="replayActive" class="replay-controls">
+                <view class="dock-icon-btn play-toggle" @tap="toggleReplayPlay">
+                  <ReplayPlayIcon :playing="state.replayPlaying" />
+                </view>
+                <slider
+                  class="replay-slider"
+                  :value="replaySliderPercent"
+                  :activeColor="replaySliderActiveColor"
+                  backgroundColor="#475569"
+                  block-color="#f8fafc"
+                  block-size="14"
+                  @changing="onReplaySliderChanging"
+                  @change="onReplaySliderChange"
+                ></slider>
+                <text class="replay-remain">{{ formatMs(replayRemainingMs) }}</text>
+                <view
+                  class="dock-icon-btn voice-toggle"
+                  :class="{ 'voice-toggle--off': !state.voiceOpen }"
+                  @tap="toggleVoiceOpen"
+                >
+                  <VoiceToggleIcon :open="state.voiceOpen" />
+                </view>
+              </view>
+              <view
+                v-else
+                class="dock-icon-btn voice-toggle voice-toggle--solo"
+                :class="{ 'voice-toggle--off': !state.voiceOpen }"
+                @tap="toggleVoiceOpen"
+              >
+                <VoiceToggleIcon :open="state.voiceOpen" />
+              </view>
+            </view>
+            <view
+              v-if="showPcOrientationToggle"
+              class="orient-toggle"
+              @tap="togglePcLayoutOrientation"
+            >
+              <text class="orient-glyph">{{ isLandscapeMode ? "竖屏" : "横屏" }}</text>
+            </view>
+            <text
+              class="nav-hand"
+              :class="{ 'nav-disabled': state.loading }"
+              @tap="onTapNextHand"
+            >下一局</text>
+          </view>
+        </view>
+        <view class="dock-safe"></view>
       </view>
-
-      <AppTabBar v-if="!isLandscapeMode" active="commentary" />
-      <view class="dock-safe"></view>
-    </view>
+    </template>
   </view>
 </template>
 
@@ -395,6 +458,8 @@ import { onLoad, onShareAppMessage } from "@dcloudio/uni-app";
 import LaunchIntroModal from "@/components/LaunchIntroModal.vue";
 import AppTabBar from "@/components/AppTabBar.vue";
 import PokerCard from "@/components/PokerCard.vue";
+import VoiceToggleIcon from "@/components/VoiceToggleIcon.vue";
+import ReplayPlayIcon from "@/components/ReplayPlayIcon.vue";
 import { useCommentaryHand } from "@/composables/useCommentaryHand";
 import { boardIndicesForDealBoardStep } from "@/utils/replayByAction";
 import { formatBbRealAnchor } from "@/utils/chipScale";
@@ -407,6 +472,7 @@ import {
   getLandscapeViewportHeight,
   hasLaunchHandParams,
   hasLaunchIdParams,
+  hasLaunchListParams,
   isLandscapeLaunchMode,
   isReviewLaunchMode,
   parseLaunchQuery,
@@ -455,22 +521,6 @@ function togglePcLayoutOrientation() {
   // #endif
 }
 
-const BEIAN_URL = "https://beian.miit.gov.cn";
-
-function openBeianLink() {
-  // #ifdef H5
-  window.open(BEIAN_URL, "_blank");
-  // #endif
-  // #ifndef H5
-  uni.setClipboardData({
-    data: BEIAN_URL,
-    success: () => {
-      uni.showToast({ title: "链接已复制，请在浏览器打开", icon: "none" });
-    },
-  });
-  // #endif
-}
-
 function actionTrailByStreet(
   p: PlayerState,
   st: Street,
@@ -494,6 +544,7 @@ const {
   seekReplayPercent,
   seekReplayStepDelta,
   toggleVoiceOpen,
+  restoreSessionIfAny,
 } = useCommentaryHand();
 
 const isHeroMode = computed(
@@ -576,6 +627,7 @@ const scrollViewStyle = computed(() =>
 );
 const narrationBlockStyle = computed(() => {
   if (isLandscapeMode.value || narrationBlockMinHeightPx.value <= 0) return {};
+  // 竖屏：只保底高度，内容撑开后由外层 page-scroll 整页滚（不解说区内嵌滚动）
   return { minHeight: `${narrationBlockMinHeightPx.value}px` };
 });
 const narBodyWrapStyle = computed(() => {
@@ -585,11 +637,9 @@ const narBodyWrapStyle = computed(() => {
 
 function updateScrollHeight() {
   const sys = getWindowMetrics();
-  const dockRpx = skipIntroModal
-    ? 0
-    : 150 + APP_TAB_BAR_HEIGHT_RPX;
-  const dockPx = (dockRpx * sys.windowWidth) / 750;
   if (isLandscapeMode.value) {
+    const dockRpx = skipIntroModal ? 0 : 150 + APP_TAB_BAR_HEIGHT_RPX;
+    const dockPx = (dockRpx * sys.windowWidth) / 750;
     const pageH = Math.min(
       getLandscapeViewportHeight(),
       sys.windowHeight,
@@ -600,15 +650,11 @@ function updateScrollHeight() {
     narBodyWrapMinHeightPx.value = 0;
     return;
   }
-  scrollHeightPx.value = Math.max(200, Math.floor(sys.windowHeight - dockPx));
-  // 牌桌区（底池+公牌+玩家列表）约占高度；解说区吃掉剩余可视区域
-  const tableReservedPx = Math.round((620 * sys.windowWidth) / 750);
-  const narrMin = Math.max(
-    220,
-    Math.floor(scrollHeightPx.value - tableReservedPx),
-  );
-  narrationBlockMinHeightPx.value = narrMin;
-  narBodyWrapMinHeightPx.value = Math.max(180, narrMin - 52);
+  // 竖屏：底栏 fixed 盖在上面；scroll 用满窗高，靠 page-inner padding 把内容滚出底栏
+  // （勿用「窗高−底栏」再塞满解说 minHeight，否则滚不动、字被底栏挡住）
+  scrollHeightPx.value = Math.max(200, Math.floor(sys.windowHeight));
+  narrationBlockMinHeightPx.value = 0;
+  narBodyWrapMinHeightPx.value = 0;
 }
 
 function scheduleRemoteLoad(mpLaunch?: ReturnType<typeof parseMpLaunchOptions>) {
@@ -616,25 +662,58 @@ function scheduleRemoteLoad(mpLaunch?: ReturnType<typeof parseMpLaunchOptions>) 
     silentToast: true,
     fallbackSampleOnFail: true,
     silentOnFail: true,
-    ...(mpLaunch && hasLaunchIdParams(mpLaunch)
-      ? {
-          initialDatasetKey: mpLaunch.k!.trim(),
-          initialCommentaryId: mpLaunch.id!.trim(),
-        }
-      : mpLaunch && hasLaunchHandParams(mpLaunch)
-        ? {
-            initialDatasetKey: mpLaunch.k!.trim(),
-            initialHandIndex: mpLaunch.i!.trim(),
-          }
-        : {}),
+    ...launchLoadOpts(mpLaunch),
+  });
+}
+
+function launchLoadOpts(launch: ReturnType<typeof parseLaunchQuery>) {
+  if (hasLaunchIdParams(launch)) {
+    return {
+      initialDatasetKey: launch.k!.trim(),
+      initialCommentaryId: launch.id!.trim(),
+    };
+  }
+  if (hasLaunchHandParams(launch)) {
+    return {
+      initialDatasetKey: launch.k!.trim(),
+      initialHandIndex: launch.i!.trim(),
+    };
+  }
+  if (hasLaunchListParams(launch)) {
+    return {
+      initialDatasetKey: launch.k!.trim(),
+      initialHandIndex: "-1",
+    };
+  }
+  return {};
+}
+
+function bootstrapCommentary(mpLaunch?: ReturnType<typeof parseMpLaunchOptions>) {
+  const launch = mpLaunch ?? launchQuery;
+  const hasDeepLink =
+    hasLaunchIdParams(launch) ||
+    hasLaunchHandParams(launch) ||
+    hasLaunchListParams(launch);
+  // 无深链且本会话已看过一手：Tab 切回时恢复进度，不随机、不自动播
+  if (!hasDeepLink && restoreSessionIfAny()) return;
+  // #ifdef MP-WEIXIN
+  if (mpLaunch !== undefined) {
+    loadSample({ silent: true });
+    setTimeout(() => scheduleRemoteLoad(mpLaunch), 400);
+    return;
+  }
+  // #endif
+  loadFresh({
+    silentToast: true,
+    fallbackSampleOnFail: true,
+    ...launchLoadOpts(launchQuery),
   });
 }
 
 // #ifdef MP-WEIXIN
 onLoad((options) => {
   const mpLaunch = parseMpLaunchOptions(options);
-  loadSample({ silent: true });
-  setTimeout(() => scheduleRemoteLoad(mpLaunch), 400);
+  bootstrapCommentary(mpLaunch);
 });
 
 onShareAppMessage(() => {
@@ -666,21 +745,7 @@ onMounted(() => {
   }
   // #endif
   // #ifndef MP-WEIXIN
-  loadFresh({
-    silentToast: true,
-    fallbackSampleOnFail: true,
-    ...(hasLaunchIdParams(launchQuery)
-      ? {
-          initialDatasetKey: launchQuery.k!.trim(),
-          initialCommentaryId: launchQuery.id!.trim(),
-        }
-      : hasLaunchHandParams(launchQuery)
-        ? {
-            initialDatasetKey: launchQuery.k!.trim(),
-            initialHandIndex: launchQuery.i!.trim(),
-          }
-        : {}),
-  });
+  bootstrapCommentary();
   // #endif
 });
 
@@ -874,7 +939,8 @@ $felt: #0f3d26;
 $panel: rgba(255, 255, 255, 0.07);
 $panel-border: rgba(255, 255, 255, 0.14);
 $pot-yellow: #fbbf24;
-$dock-bg: rgba(15, 61, 38, 0.96);
+/* 比桌面更深，和内容区拉开层次（不用硬分割线） */
+$dock-bg: #0a2418;
 
 /* 宽屏 ls=1：Simple GTO 色彩风格 */
 $ls-bg: #0a0a0a;
@@ -887,6 +953,12 @@ $ls-text-muted: #888888;
 $ls-sync-head-h: 56rpx;
 $ls-top-row-h: 15%;
 $ls-top-row-gap: 10rpx;
+/* #ifdef H5 */
+$tab-bar-h: 128rpx;
+/* #endif */
+/* #ifndef H5 */
+$tab-bar-h: 88rpx;
+/* #endif */
 
 .page-root {
   width: 100%;
@@ -1076,12 +1148,17 @@ $ls-top-row-gap: 10rpx;
   flex: 1 1 0;
   min-height: 0;
   margin-bottom: 0;
-  padding: 0 12rpx;
+  padding: 14rpx 12rpx;
   border-radius: 0;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
   justify-content: center;
+}
+
+.page-inner--ls .player-card:first-child,
+.page-inner--ls .player-card:last-child {
+  border-radius: 0;
 }
 
 .page-inner--ls .analysis-box {
@@ -1566,11 +1643,7 @@ $ls-top-row-gap: 10rpx;
 .page-root--ls .play-toggle,
 .page-root--ls .voice-toggle,
 .page-root--ls .orient-toggle {
-  background: #2a2a2a;
-}
-
-.page-root--ls .icp-record {
-  color: $ls-text-muted;
+  background: transparent;
 }
 
 .page-scroll {
@@ -1594,30 +1667,30 @@ $ls-top-row-gap: 10rpx;
 .nar-head-row {
   display: flex;
   flex-direction: row;
-  align-items: flex-start;
-  gap: 8rpx;
+  align-items: center;
+  gap: 4rpx;
   margin-bottom: 10rpx;
 }
 
 .nar-step-hit {
   flex-shrink: 0;
-  width: 96rpx;
-  min-width: 96rpx;
-  min-height: 96rpx;
-  padding: 12rpx 8rpx;
-  margin: -8rpx -4rpx;
+  width: 48rpx;
+  min-width: 48rpx;
+  height: 44rpx;
+  padding: 0;
+  margin: 0;
   align-items: center;
   justify-content: center;
   display: flex;
   box-sizing: border-box;
-  background: rgba(56, 189, 248, 0.14);
-  border: 1rpx solid rgba(56, 189, 248, 0.35);
-  border-radius: 16rpx;
+  background: transparent;
+  border: none;
+  border-radius: 0;
 }
 
 .nar-step-glyph {
-  font-size: 48rpx;
-  font-weight: 700;
+  font-size: 36rpx;
+  font-weight: 600;
   color: #38bdf8;
   line-height: 1;
 }
@@ -1646,8 +1719,17 @@ $ls-top-row-gap: 10rpx;
   box-sizing: border-box;
 }
 
+/* 竖屏：为 fixed 底栏（回放条 + ICP + Tab）留空，整页可滚完解说 */
+.page-root:not(.page-root--ls) .page-inner {
+  padding-bottom: calc(160rpx + #{$tab-bar-h} + env(safe-area-inset-bottom));
+}
+
+.page-inner--ls {
+  padding-bottom: 0;
+}
+
 .scroll-pad {
-  height: 12rpx;
+  height: 24rpx;
 }
 
 .panel {
@@ -1664,7 +1746,7 @@ $ls-top-row-gap: 10rpx;
 }
 
 .panel.panel-players {
-  padding: 12rpx 14rpx;
+  padding: 0;
   margin-bottom: 16rpx;
 }
 
@@ -2030,12 +2112,22 @@ $ls-top-row-gap: 10rpx;
 
 .player-card {
   background: rgba(0, 0, 0, 0.12);
-  border-radius: 12rpx;
+  border-radius: 0;
   padding: 14rpx 12rpx;
-  margin-bottom: 10rpx;
+  margin-bottom: 0;
   border: 2rpx solid transparent;
   min-height: 108rpx;
   box-sizing: border-box;
+}
+
+.player-card:first-child {
+  border-top-left-radius: 12rpx;
+  border-top-right-radius: 12rpx;
+}
+
+.player-card:last-child {
+  border-bottom-left-radius: 12rpx;
+  border-bottom-right-radius: 12rpx;
 }
 
 .player-card.focus {
@@ -2360,38 +2452,35 @@ $ls-top-row-gap: 10rpx;
 }
 
 .dock {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 0;
+  width: 100%;
+  max-width: 480px;
+  box-sizing: border-box;
+  z-index: 20;
   flex-shrink: 0;
-  position: relative;
   background: $dock-bg;
-  border-top: 1rpx solid rgba(255, 255, 255, 0.12);
-  padding: 16rpx 24rpx 0;
+  border-top: none;
+  box-shadow: 0 -12rpx 28rpx rgba(0, 0, 0, 0.35);
+  padding: 12rpx 24rpx 0;
   padding-bottom: constant(safe-area-inset-bottom);
   padding-bottom: env(safe-area-inset-bottom);
 }
 
 .page-root.page-root--ls .dock,
 .dock.dock--ls {
-  background: #141414;
-  border-top-color: $ls-border;
+  max-width: 1280px;
+  background: #0e0e0e;
+  border-top: none;
+  box-shadow: 0 -12rpx 28rpx rgba(0, 0, 0, 0.55);
 }
 
 .replay-dock {
   position: relative;
   z-index: 1;
-  margin-bottom: 14rpx;
-}
-
-.icp-record {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: calc(6rpx + 3px);
-  z-index: 0;
-  text-align: center;
-  font-size: 19rpx;
-  color: #94a3b8;
-  line-height: 1;
-  text-decoration: underline;
+  margin-bottom: 0;
 }
 
 .replay-row {
@@ -2432,77 +2521,69 @@ $ls-top-row-gap: 10rpx;
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 12rpx;
+  gap: 8rpx;
   flex: 1;
   min-width: 0;
 }
 
-.play-toggle {
-  width: 72rpx;
-  height: 72rpx;
-  border-radius: 16rpx;
-  background: #334155;
+.dock-icon-btn {
+  flex-shrink: 0;
+  width: 48rpx;
+  height: 48rpx;
+  display: flex;
   align-items: center;
   justify-content: center;
-  display: flex;
-  flex-shrink: 0;
+  line-height: 0;
 }
 
-.play-glyph {
-  font-size: 32rpx;
-  color: #f8fafc;
+.play-toggle {
+  /* 继承 .dock-icon-btn */
 }
 
 .replay-slider {
   flex: 1;
   min-width: 0;
+  margin: 0;
 }
 
 .replay-remain {
   flex-shrink: 0;
-  min-width: 72rpx;
+  min-width: 64rpx;
   text-align: right;
   font-size: 22rpx;
   font-weight: 600;
   color: #e2e8f0;
   font-variant-numeric: tabular-nums;
+  line-height: 48rpx;
 }
 
 .voice-toggle {
-  flex-shrink: 0;
-  width: 56rpx;
-  height: 56rpx;
-  border-radius: 14rpx;
-  background: #334155;
-  align-items: center;
-  justify-content: center;
-  display: flex;
+  /* 继承 .dock-icon-btn */
+}
+
+.voice-toggle--solo {
+  margin: 0 auto;
 }
 
 .voice-toggle--off {
-  background: #1e293b;
-  opacity: 0.72;
-}
-
-.voice-glyph {
-  font-size: 28rpx;
-  line-height: 1;
+  opacity: 0.45;
 }
 
 .orient-toggle {
   flex-shrink: 0;
   min-width: 56rpx;
   height: 56rpx;
-  padding: 0 12rpx;
-  border-radius: 14rpx;
-  background: #334155;
+  padding: 0 8rpx;
+  border-radius: 0;
+  background: transparent;
+  border: none;
   align-items: center;
   justify-content: center;
   display: flex;
 }
 
 .orient-glyph {
-  font-size: 20rpx;
+  font-size: 22rpx;
   font-weight: 600;
   color: #e2e8f0;
   line-height: 1;
