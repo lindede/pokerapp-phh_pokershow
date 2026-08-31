@@ -51,7 +51,7 @@
           <view class="adm-panel-head">
             <text class="adm-panel-title">应用分类</text>
             <text class="adm-panel-desc"
-              >面向用户的分类（app_data/catalog）。在「点位」勾选原料后创建；这里设门槛并生成解说。</text
+              >面向用户的分类（app_data/catalog）。在「点位」勾选原料后创建；这里设门槛、发布状态、生成解说与语音。</text
             >
           </view>
           <input
@@ -69,6 +69,10 @@
               <view class="cat-row-main">
                 <view class="cat-row-top">
                   <text class="cat-row-title">{{ c.display_name || c.category_code }}</text>
+                  <AdminBadge
+                    :label="publishStatusLabel(c.publish_status)"
+                    :tone="contentStatusTone(c.publish_status || 'draft')"
+                  />
                   <text v-if="c.is_experience" class="cat-tag">体验</text>
                   <text v-if="!c.in_catalog" class="cat-tag cat-tag--muted">仅库</text>
                   <text class="cat-row-count">{{ c.hand_count }} 手</text>
@@ -94,8 +98,30 @@
                 {{ c.is_experience ? "取消体验" : "标为体验" }}
               </button>
               <button class="btn btn--sm cat-btn" @tap="saveCategory(c)">保存</button>
+              <button
+                class="btn btn--sm btn--ghost cat-btn"
+                @tap="setCategoryStatus(c, 'staged')"
+              >
+                内测 A
+              </button>
+              <button class="btn btn--sm cat-btn" @tap="setCategoryStatus(c, 'published')">
+                全员 B
+              </button>
+              <button
+                class="btn btn--sm btn--danger-ghost cat-btn"
+                @tap="setCategoryStatus(c, 'archived')"
+              >
+                下线
+              </button>
               <button class="btn btn--sm btn--ghost cat-btn" @tap="openHandsSheet(c)">
                 编辑
+              </button>
+              <button
+                class="btn btn--sm btn--ghost cat-btn"
+                :disabled="!c.hand_count"
+                @tap="openViewCommentarySheet(c)"
+              >
+                查看解说
               </button>
               <button
                 class="btn btn--sm btn--ghost cat-btn"
@@ -103,6 +129,13 @@
                 @tap="openGenerateSheetForCategory(c)"
               >
                 生成解说
+              </button>
+              <button
+                class="btn btn--sm btn--ghost cat-btn"
+                :disabled="!c.hand_count"
+                @tap="openVoiceSheetForCategory(c)"
+              >
+                生成语音
               </button>
               <button
                 v-if="!c.in_catalog"
@@ -224,26 +257,52 @@
         </view>
 
         <view v-if="tab === 'content'" class="panel">
-          <text class="hint">解说在「应用分类」生成到磁盘后，在这里导入索引，再内测 A / 全员 B。</text>
-          <button class="btn" @tap="importDisk">从磁盘导入解说索引</button>
-          <input
-            class="input adm-search"
-            v-model="contentSpotFilter"
-            placeholder="按 spot_code 筛选，如 …_BTN_AA"
-            @confirm="loadContent"
-          />
-          <button class="btn btn--ghost" @tap="loadContent">刷新列表</button>
-          <view v-for="c in contentItems" :key="c.id" class="adm-card">
-            <view class="adm-card-head">
-              <text class="adm-card-title">#{{ c.id }} · {{ c.kind }}</text>
-              <AdminBadge :label="c.status" :tone="contentStatusTone(c.status)" />
+          <view class="adm-panel-head">
+            <text class="adm-panel-title">发布 · 按分类</text>
+            <text class="adm-panel-desc"
+              >A=内测可见，B=全员可见。按应用分类一条状态，不再按牌局维护 content_items。</text
+            >
+          </view>
+          <button class="btn btn--ghost" @tap="loadCategories">刷新分类</button>
+          <text v-if="!categories.length" class="hint"
+            >暂无应用分类。请到「点位」创建后再回来发布。</text
+          >
+          <view v-for="c in categories" :key="'pub-' + c.category_code" class="cat-row">
+            <view class="cat-row-head">
+              <view class="cat-row-main">
+                <view class="cat-row-top">
+                  <text class="cat-row-title">{{ c.display_name || c.category_code }}</text>
+                  <AdminBadge
+                    :label="publishStatusLabel(c.publish_status)"
+                    :tone="contentStatusTone(c.publish_status || 'draft')"
+                  />
+                  <text class="cat-row-count">{{ c.hand_count }} 手</text>
+                </view>
+                <text class="cat-row-code">{{ c.category_code }}</text>
+              </view>
             </view>
-            <text class="adm-card-mono">{{ c.external_key.slice(0, 36) }}…</text>
-            <text v-if="contentSpotCode(c)" class="adm-card-mono">spot {{ contentSpotCode(c) }}</text>
-            <view class="adm-card-actions">
-              <button class="btn btn--sm btn--ghost" @tap="setStatus(c.id, 'staged')">内测 A</button>
-              <button class="btn btn--sm" @tap="setStatus(c.id, 'published')">全员 B</button>
-              <button class="btn btn--sm btn--danger-ghost" @tap="setStatus(c.id, 'archived')">下线</button>
+            <view class="cat-row-actions">
+              <button
+                class="btn btn--sm btn--ghost cat-btn"
+                @tap="setCategoryStatus(c, 'staged')"
+              >
+                内测 A
+              </button>
+              <button class="btn btn--sm cat-btn" @tap="setCategoryStatus(c, 'published')">
+                全员 B
+              </button>
+              <button
+                class="btn btn--sm btn--danger-ghost cat-btn"
+                @tap="setCategoryStatus(c, 'archived')"
+              >
+                下线
+              </button>
+              <button
+                class="btn btn--sm btn--ghost cat-btn"
+                @tap="setCategoryStatus(c, 'draft')"
+              >
+                草稿
+              </button>
             </view>
           </view>
         </view>
@@ -357,6 +416,31 @@
         </view>
 
         <view class="sheet-section">
+          <text class="sheet-section-title">生成方式</text>
+          <view class="sheet-chip-row sheet-chip-row--wrap">
+            <view
+              class="sheet-chip"
+              :class="{ on: commentaryWay === 'oneshot' }"
+              @tap="commentaryWay = 'oneshot'"
+            >
+              <text>整手一次</text>
+            </view>
+            <view
+              class="sheet-chip"
+              :class="{ on: commentaryWay === 'batched' }"
+              @tap="commentaryWay = 'batched'"
+            >
+              <text>按点多次</text>
+            </view>
+          </view>
+          <text class="sheet-note">{{
+            commentaryWay === "oneshot"
+              ? "一次 LLM 调用覆盖整手（更快，默认）。"
+              : "每个关注点单独调用 LLM（更细，更慢）。"
+          }}</text>
+        </view>
+
+        <view class="sheet-section">
           <view class="sheet-field-head">
             <text class="sheet-section-title sheet-section-title--inline">本批最多生成</text>
             <text
@@ -394,14 +478,63 @@
           >
         </view>
 
-        <view class="sheet-toggle-row" @tap="generateForce = !generateForce">
+        <view
+          class="sheet-toggle-row"
+          @tap="toggleGenerateForce"
+        >
           <view class="sheet-toggle-copy">
             <text class="sheet-toggle-title">强制重跑</text>
-            <text class="sheet-toggle-hint">已有制品也重新生成</text>
+            <text class="sheet-toggle-hint">仅覆盖下方勾选的已有模型产物</text>
           </view>
           <view class="sheet-switch" :class="{ on: generateForce }">
             <view class="sheet-switch-knob" />
           </view>
+        </view>
+
+        <view v-if="generateForce" class="sheet-section">
+          <view class="sheet-field-head">
+            <text class="sheet-section-title sheet-section-title--inline">可覆盖的已有数据</text>
+            <view class="sheet-chip-row">
+              <view
+                class="sheet-chip"
+                :class="{ on: isAllOverwriteModels }"
+                @tap.stop="selectAllOverwriteModels"
+              >
+                <text>全选</text>
+              </view>
+              <view
+                class="sheet-chip"
+                :class="{ on: isDefaultOverwriteModels }"
+                @tap.stop="resetOverwriteModelsToDummy"
+              >
+                <text>默认</text>
+              </view>
+            </view>
+          </view>
+          <view class="overwrite-model-list">
+            <view
+              v-for="m in commentaryModels"
+              :key="'ow-' + m.id"
+              class="overwrite-model-row"
+              @tap="toggleOverwriteModel(m.id)"
+            >
+              <AdminCheck
+                :model-value="isOverwriteModelSelected(m.id)"
+                @update:model-value="(on) => setOverwriteModel(m.id, on)"
+              />
+              <view class="overwrite-model-main">
+                <text
+                  class="sheet-badge"
+                  :class="m.id === 'dummy' || m.kind === 'dummy' ? 'sheet-badge--dummy' : 'sheet-badge--llm'"
+                  >{{ m.id === "dummy" || m.kind === "dummy" ? "模板" : "LLM" }}</text
+                >
+                <text class="overwrite-model-label">{{ m.label || m.id }}</text>
+              </view>
+            </view>
+          </view>
+          <text class="sheet-note"
+            >未勾选的模型产物会保留。默认只覆盖 DummyLLM，避免误删正式 LLM 解说。</text
+          >
         </view>
 
         <view class="sheet-foot">
@@ -411,10 +544,130 @@
           <button
             class="btn sheet-btn sheet-btn--primary"
             :loading="generating"
-            :disabled="generating || plannedGenerateCount <= 0 || !generateTarget"
+            :disabled="
+              generating ||
+              plannedGenerateCount <= 0 ||
+              !generateTarget ||
+              (generateForce && !forceOverwriteModels.length)
+            "
             @tap="startGenerateJob"
           >
             开始 · {{ plannedGenerateCount }} 手
+          </button>
+        </view>
+      </view>
+    </view>
+
+    <view v-if="voiceSheetOpen" class="sheet-mask" @tap="closeVoiceSheet">
+      <view class="sheet" @tap.stop>
+        <view class="sheet-head">
+          <view class="sheet-head-text">
+            <text class="sheet-title">生成语音任务</text>
+            <text class="sheet-sub">{{
+              voiceTarget
+                ? `${voiceTarget.display_name || voiceTarget.category_code} · Edge TTS · 确认后排队`
+                : "Edge TTS · 确认参数后排队"
+            }}</text>
+          </view>
+          <view class="sheet-close" @tap="closeVoiceSheet">
+            <text class="sheet-close-txt">×</text>
+          </view>
+        </view>
+
+        <view class="sheet-stats">
+          <view class="sheet-stat">
+            <text class="sheet-stat-val sheet-stat-val--code">{{
+              voiceTarget?.category_code || "—"
+            }}</text>
+            <text class="sheet-stat-lab">应用分类</text>
+          </view>
+          <view class="sheet-stat-div" />
+          <view class="sheet-stat">
+            <text class="sheet-stat-val">{{ voiceTargetHandCount }}</text>
+            <text class="sheet-stat-lab">分类手数</text>
+          </view>
+          <view class="sheet-stat-div" />
+          <view class="sheet-stat sheet-stat--accent">
+            <text class="sheet-stat-val">{{ plannedVoiceCount }}</text>
+            <text class="sheet-stat-lab">本批生成</text>
+          </view>
+        </view>
+
+        <view class="sheet-section">
+          <text class="sheet-section-title">音色</text>
+          <picker :range="voiceLabels" :value="voiceIndex" @change="onVoicePickChange">
+            <view class="sheet-picker">
+              <view class="sheet-picker-main">
+                <text class="sheet-badge sheet-badge--llm">Edge</text>
+                <text class="sheet-picker-label">{{ voiceLabel }}</text>
+              </view>
+              <text class="sheet-picker-chevron">›</text>
+            </view>
+          </picker>
+          <text v-if="!ttsVoicesAvailable" class="sheet-note"
+            >服务端未安装 edge-tts 时无法排队。</text
+          >
+        </view>
+
+        <view class="sheet-section">
+          <view class="sheet-field-head">
+            <text class="sheet-section-title sheet-section-title--inline">本批最多生成</text>
+            <text
+              class="sheet-chip"
+              :class="{ on: isAllHandsVoiceLimit }"
+              @tap="setVoiceLimitAllHands"
+              >所有手</text
+            >
+          </view>
+          <view class="sheet-inline">
+            <input
+              class="input sheet-input sheet-input--num"
+              type="number"
+              v-model="voiceLimit"
+              placeholder="10"
+            />
+            <text class="sheet-unit">手</text>
+          </view>
+          <text v-if="voiceLimitCapNote" class="sheet-note">{{ voiceLimitCapNote }}</text>
+        </view>
+
+        <view class="sheet-section">
+          <text class="sheet-section-title">并发</text>
+          <view class="sheet-inline">
+            <input
+              class="input sheet-input sheet-input--num"
+              type="number"
+              v-model="voiceConcurrency"
+              placeholder="2"
+            />
+            <text class="sheet-unit">路</text>
+          </view>
+          <text class="sheet-note">Edge 建议 1–2；过大易被限流。无解说的手会自动跳过。</text>
+        </view>
+
+        <view class="sheet-toggle-row" @tap="voiceForce = !voiceForce">
+          <view class="sheet-toggle-copy">
+            <text class="sheet-toggle-title">强制重跑</text>
+            <text class="sheet-toggle-hint">已有 mp3 也重新合成</text>
+          </view>
+          <view class="sheet-switch" :class="{ on: voiceForce }">
+            <view class="sheet-switch-knob" />
+          </view>
+        </view>
+
+        <view class="sheet-foot">
+          <button class="btn btn--ghost sheet-btn" :disabled="voiceGenerating" @tap="closeVoiceSheet">
+            取消
+          </button>
+          <button
+            class="btn sheet-btn sheet-btn--primary"
+            :loading="voiceGenerating"
+            :disabled="
+              voiceGenerating || plannedVoiceCount <= 0 || !voiceTarget || !ttsVoicesAvailable
+            "
+            @tap="startVoiceJob"
+          >
+            开始 · {{ plannedVoiceCount }} 手
           </button>
         </view>
       </view>
@@ -756,6 +1009,131 @@
         </view>
       </view>
     </view>
+
+    <view v-if="viewSheetOpen" class="sheet-mask" @tap="closeViewCommentarySheet">
+      <view class="sheet sheet--tall" @tap.stop>
+        <view class="sheet-head">
+          <view class="sheet-head-text">
+            <text class="sheet-title">查看解说 · {{ viewSheetTitle }}</text>
+            <text class="sheet-sub"
+              >{{ viewSheetHands.length }} 手 · 点击牌局打开制品页</text
+            >
+          </view>
+          <view class="sheet-close" @tap="closeViewCommentarySheet">
+            <text class="sheet-close-txt">×</text>
+          </view>
+        </view>
+
+        <view class="adm-filter-tabs hands-edit-tabs">
+          <text
+            class="adm-filter-tab"
+            :class="{ on: viewSheetTab === 'all' }"
+            @tap="viewSheetTab = 'all'"
+            >全列表</text
+          >
+          <text
+            class="adm-filter-tab"
+            :class="{ on: viewSheetTab === 'spots' }"
+            @tap="viewSheetTab = 'spots'"
+            >点位过滤</text
+          >
+        </view>
+
+        <view v-if="viewSheetTab === 'all'" class="sheet-section">
+          <input
+            class="input adm-search"
+            v-model="viewHandQuery"
+            placeholder="过滤 slug / key / spot"
+          />
+          <scroll-view v-if="viewFilteredHands.length" class="hands-list" scroll-y>
+            <view
+              v-for="h in viewFilteredHands"
+              :key="handKey(h)"
+              class="hands-row hands-row--link"
+              @tap="openHandArtifact(h)"
+            >
+              <view class="hands-row-body">
+                <view class="hands-row-top">
+                  <text class="hands-row-slug">{{ h.i }}-{{ h.hero_seat }}</text>
+                  <text
+                    class="view-status"
+                    :class="h.has_commentary ? 'view-status--ok' : 'view-status--miss'"
+                    >{{ h.has_commentary ? "解说✓" : "无解说" }}</text
+                  >
+                  <text
+                    class="view-status"
+                    :class="h.has_voice ? 'view-status--ok' : 'view-status--miss'"
+                    >{{ h.has_voice ? "语音✓" : "无语音" }}</text
+                  >
+                </view>
+                <text class="hands-row-key">{{ h.phhs_key }}</text>
+                <text v-if="h.spot_code" class="hands-row-spot">{{ h.spot_code }}</text>
+              </view>
+            </view>
+          </scroll-view>
+          <text v-else class="hint">{{
+            viewSheetHands.length ? "没有匹配的牌局" : "本分类暂无手牌"
+          }}</text>
+        </view>
+
+        <view v-else class="sheet-section">
+          <input
+            class="input adm-search"
+            v-model="viewSpotQuery"
+            placeholder="过滤点位 code"
+          />
+          <scroll-view v-if="viewSpotGroups.length" class="append-cat-list" scroll-y>
+            <view
+              v-for="g in viewSpotGroups"
+              :key="'vs-' + g.spot"
+              class="append-cat-row"
+              :class="{ on: viewFocusSpot === g.spot }"
+              @tap="viewFocusSpot = viewFocusSpot === g.spot ? '' : g.spot"
+            >
+              <view class="append-cat-main">
+                <text class="append-cat-code">{{ g.spot }}</text>
+                <text class="append-cat-count">{{ g.hands.length }} 手</text>
+              </view>
+            </view>
+          </scroll-view>
+          <text v-else class="hint">没有匹配的点位</text>
+
+          <view v-if="viewFocusSpot" class="view-spot-hands">
+            <text class="sheet-section-title">{{ viewFocusSpot }}</text>
+            <scroll-view class="hands-list hands-list--nested" scroll-y>
+              <view
+                v-for="h in viewFocusSpotHands"
+                :key="handKey(h)"
+                class="hands-row hands-row--link"
+                @tap="openHandArtifact(h)"
+              >
+                <view class="hands-row-body">
+                  <view class="hands-row-top">
+                    <text class="hands-row-slug">{{ h.i }}-{{ h.hero_seat }}</text>
+                    <text
+                      class="view-status"
+                      :class="h.has_commentary ? 'view-status--ok' : 'view-status--miss'"
+                      >{{ h.has_commentary ? "解说✓" : "无解说" }}</text
+                    >
+                    <text
+                      class="view-status"
+                      :class="h.has_voice ? 'view-status--ok' : 'view-status--miss'"
+                      >{{ h.has_voice ? "语音✓" : "无语音" }}</text
+                    >
+                  </view>
+                  <text class="hands-row-key">{{ h.phhs_key }}</text>
+                </view>
+              </view>
+            </scroll-view>
+          </view>
+          <text v-else class="hint">点选上方点位后查看该格牌局</text>
+        </view>
+
+        <view class="sheet-actions">
+          <button class="btn btn--ghost sheet-btn" @tap="closeViewCommentarySheet">关闭</button>
+        </view>
+      </view>
+    </view>
   </view>
 </template>
 
@@ -779,7 +1157,6 @@ import {
   type CatalogMeta,
   type CategoryPricingItem,
   type CommentaryModelItem,
-  type ContentItem,
   type JobItem,
 } from "@/config/admin-api";
 
@@ -791,8 +1168,6 @@ const verifying = ref(false);
 const restoring = ref(Boolean(getAdminToken()));
 const authError = ref("");
 const adminToken = ref("");
-const contentItems = ref<ContentItem[]>([]);
-const contentSpotFilter = ref("");
 const jobs = ref<JobItem[]>([]);
 const categories = ref<CategoryPricingItem[]>([]);
 const catalogMeta = ref<CatalogMeta | null>(null);
@@ -818,6 +1193,22 @@ const removeSpotCodes = ref<string[]>([]);
 const removeCatMode = ref<"per_spot" | "total">("per_spot");
 const removeCatLimit = ref("");
 const removeCatPick = ref<"random" | "sequential">("random");
+const viewSheetOpen = ref(false);
+const viewSheetTitle = ref("");
+const viewSheetHands = ref<
+  {
+    phhs_key: string;
+    i: number;
+    hero_seat: number;
+    spot_code?: string;
+    has_commentary?: boolean;
+    has_voice?: boolean;
+  }[]
+>([]);
+const viewSheetTab = ref<"all" | "spots">("all");
+const viewHandQuery = ref("");
+const viewSpotQuery = ref("");
+const viewFocusSpot = ref("");
 const appendCatSheetOpen = ref(false);
 const appendTargetCode = ref("");
 const appendCatMode = ref<"per_spot" | "total">("per_spot");
@@ -843,13 +1234,28 @@ const spotLoading = ref(false);
 const selectedSpotCodes = ref<string[]>([]);
 const generateLimit = ref("10");
 const generateForce = ref(false);
+const forceOverwriteModels = ref<string[]>(["dummy"]);
 const generating = ref(false);
 const generateSheetOpen = ref(false);
 const generateTarget = ref<CategoryPricingItem | null>(null);
 const generateConcurrency = ref("16");
 const generateModelId = ref("dummy");
+const commentaryWay = ref<"oneshot" | "batched">("oneshot");
 const commentaryModels = ref<CommentaryModelItem[]>([
   { id: "dummy", label: "DummyLLM（模板）", kind: "dummy" },
+]);
+const voiceSheetOpen = ref(false);
+const voiceTarget = ref<CategoryPricingItem | null>(null);
+const voiceLimit = ref("10");
+const voiceForce = ref(false);
+const voiceGenerating = ref(false);
+const voiceConcurrency = ref("2");
+const voiceId = ref("zh-CN-YunxiNeural");
+const ttsVoicesAvailable = ref(true);
+const ttsVoiceOptions = ref<{ id: string; label: string }[]>([
+  { id: "zh-CN-YunxiNeural", label: "云希 · 男" },
+  { id: "zh-CN-YunyangNeural", label: "云扬 · 男新闻" },
+  { id: "zh-CN-XiaoxiaoNeural", label: "晓晓 · 女" },
 ]);
 
 const spotPositions = computed(() => {
@@ -952,6 +1358,110 @@ const generateLimitCapNote = computed(() => {
   return `分类共 ${total} 手，本批取列表前 ${generateCap.value} 手`;
 });
 
+const voiceCap = computed(() => {
+  const n = Number(voiceLimit.value);
+  if (!Number.isFinite(n)) return 10;
+  return Math.min(500, Math.max(1, Math.floor(n)));
+});
+
+const voiceConcurrencyCap = computed(() => {
+  const n = Number(voiceConcurrency.value);
+  if (!Number.isFinite(n) || n <= 0) return 2;
+  return Math.min(8, Math.max(1, Math.floor(n)));
+});
+
+const voiceTargetHandCount = computed(() =>
+  Math.max(0, voiceTarget.value?.hand_count || 0),
+);
+
+const plannedVoiceCount = computed(() => {
+  const total = voiceTargetHandCount.value;
+  if (total <= 0) return 0;
+  return Math.min(voiceCap.value, total);
+});
+
+const voiceLimitAllHands = computed(() => {
+  const total = voiceTargetHandCount.value;
+  if (total <= 0) return 1;
+  return Math.min(500, total);
+});
+
+const isAllHandsVoiceLimit = computed(
+  () =>
+    voiceTargetHandCount.value > 0 && voiceCap.value === voiceLimitAllHands.value,
+);
+
+const voiceLimitCapNote = computed(() => {
+  const total = voiceTargetHandCount.value;
+  if (total <= 0) return "该分类没有手牌，无法生成";
+  if (voiceCap.value >= total) {
+    return `将处理分类内全部 ${total} 手（无解说则跳过）`;
+  }
+  return `分类共 ${total} 手，本批取列表前 ${voiceCap.value} 手`;
+});
+
+const voiceLabels = computed(() =>
+  ttsVoiceOptions.value.map((v) => v.label || v.id),
+);
+
+const voiceIndex = computed(() => {
+  const i = ttsVoiceOptions.value.findIndex((v) => v.id === voiceId.value);
+  return i >= 0 ? i : 0;
+});
+
+const voiceLabel = computed(() => {
+  const v = ttsVoiceOptions.value.find((x) => x.id === voiceId.value);
+  return v?.label || voiceId.value;
+});
+
+const isAllOverwriteModels = computed(() => {
+  const ids = commentaryModels.value.map((m) => m.id);
+  return ids.length > 0 && ids.every((id) => forceOverwriteModels.value.includes(id));
+});
+
+const isDefaultOverwriteModels = computed(() => {
+  const cur = forceOverwriteModels.value;
+  return cur.length === 1 && cur[0] === "dummy";
+});
+
+function isOverwriteModelSelected(id: string) {
+  return forceOverwriteModels.value.includes(id);
+}
+
+function setOverwriteModel(id: string, on: boolean) {
+  const cur = forceOverwriteModels.value;
+  if (on) {
+    if (!cur.includes(id)) forceOverwriteModels.value = [...cur, id];
+  } else {
+    forceOverwriteModels.value = cur.filter((x) => x !== id);
+  }
+}
+
+function toggleOverwriteModel(id: string) {
+  setOverwriteModel(id, !isOverwriteModelSelected(id));
+}
+
+function selectAllOverwriteModels() {
+  forceOverwriteModels.value = commentaryModels.value.map((m) => m.id);
+}
+
+function resetOverwriteModelsToDummy() {
+  const hasDummy = commentaryModels.value.some((m) => m.id === "dummy");
+  forceOverwriteModels.value = hasDummy
+    ? ["dummy"]
+    : commentaryModels.value[0]
+      ? [commentaryModels.value[0].id]
+      : ["dummy"];
+}
+
+function toggleGenerateForce() {
+  const next = !generateForce.value;
+  generateForce.value = next;
+  if (next) {
+    resetOverwriteModelsToDummy();
+  }
+}
+
 function setGenerateLimitAllHands() {
   if (generateTargetHandCount.value <= 0) {
     uni.showToast({ title: "分类里没有手牌", icon: "none" });
@@ -1009,9 +1519,19 @@ function contentStatusTone(status: string) {
   return "info";
 }
 
+function publishStatusLabel(status: string | undefined) {
+  const s = (status || "draft").toLowerCase();
+  if (s === "published") return "B · 全员";
+  if (s === "staged") return "A · 内测";
+  if (s === "archived") return "下线";
+  if (s === "draft") return "草稿";
+  return s;
+}
+
 function jobTypeLabel(jobType: string) {
   if (jobType === "generate_commentary_spots") return "生成解说";
   if (jobType === "generate_commentary_app_category") return "分类生成解说";
+  if (jobType === "generate_voice_app_category") return "分类生成语音";
   if (jobType === "import_commentary_disk") return "导入解说索引";
   return jobType;
 }
@@ -1021,7 +1541,8 @@ function jobProgressLine(j: JobItem) {
   const total = j.progress_total;
   if (
     j.job_type === "generate_commentary_spots" ||
-    j.job_type === "generate_commentary_app_category"
+    j.job_type === "generate_commentary_app_category" ||
+    j.job_type === "generate_voice_app_category"
   ) {
     return `${done}/${total} 手`;
   }
@@ -1034,11 +1555,25 @@ function jobResultLine(j: JobItem) {
   const parts: string[] = [];
   if (typeof r.generated === "number") parts.push(`新生成 ${r.generated}`);
   if (typeof r.skipped === "number") parts.push(`跳过 ${r.skipped}`);
+  if (typeof r.skipped_no_commentary === "number" && r.skipped_no_commentary > 0) {
+    parts.push(`无解说 ${r.skipped_no_commentary}`);
+  }
   if (typeof r.skipped_inflight === "number" && r.skipped_inflight > 0) {
     parts.push(`他任务占用 ${r.skipped_inflight}`);
   }
   if (typeof r.failed === "number" && r.failed > 0) parts.push(`失败 ${r.failed}`);
   if (typeof r.imported === "number") parts.push(`导入 ${r.imported}`);
+  if (typeof r.mp3_generated === "number" && r.mp3_generated > 0) {
+    parts.push(`mp3 ${r.mp3_generated}`);
+  }
+  if (typeof r.voice === "string" && r.voice) parts.push(String(r.voice));
+  if (typeof r.commentary_way === "string" && r.commentary_way) {
+    parts.push(r.commentary_way === "oneshot" ? "整手" : "按点");
+  }
+  if (typeof r.force_overwrite_models === "object" && Array.isArray(r.force_overwrite_models)) {
+    const ow = r.force_overwrite_models.filter((x: unknown) => typeof x === "string");
+    if (ow.length) parts.push(`覆盖 ${ow.join(",")}`);
+  }
   if (typeof r.model === "string" && r.model) parts.push(String(r.model));
   return parts.join(" · ");
 }
@@ -1085,7 +1620,6 @@ function resetSession() {
   authError.value = "";
   adminToken.value = "";
   categories.value = [];
-  contentItems.value = [];
   jobs.value = [];
   lookedUser.value = null;
   batchCodes.value = [];
@@ -1099,7 +1633,7 @@ function resetSession() {
 }
 
 async function loadWorkspace() {
-  await Promise.all([loadCategories(), loadContent(), loadJobs(), loadConfig()]);
+  await Promise.all([loadCategories(), loadJobs(), loadConfig()]);
 }
 
 function onTab(next: AdminTab) {
@@ -1107,9 +1641,12 @@ function onTab(next: AdminTab) {
   if (!isLoggedIn.value) return;
   if (next === "categories") loadCategories();
   if (next === "spots") loadSpots();
-  if (next === "content") loadContent();
-  if (next === "credits") loadConfig();
+  if (next === "content") loadCategories();
   if (next === "jobs") loadJobs();
+  if (next === "credits") {
+    loadConfig();
+    lookedUser.value = null;
+  }
 }
 
 function onThresholdInput(c: CategoryPricingItem, e: { detail?: { value?: string } }) {
@@ -1131,11 +1668,6 @@ function categoryLabel(c: CategoryPricingItem): string {
     return name;
   }
   return c.category_code;
-}
-
-function contentSpotCode(c: ContentItem): string {
-  const v = c.meta?.spot_code;
-  return typeof v === "string" ? v : "";
 }
 
 async function loadCategories() {
@@ -1213,6 +1745,8 @@ type AppHandRow = {
   i: number;
   hero_seat: number;
   spot_code?: string;
+  has_commentary?: boolean;
+  has_voice?: boolean;
 };
 
 function handKey(h: AppHandRow): string {
@@ -1324,6 +1858,82 @@ async function openHandsSheet(c: CategoryPricingItem) {
 
 function closeHandsSheet() {
   handsSheetOpen.value = false;
+}
+
+async function openViewCommentarySheet(c: CategoryPricingItem) {
+  viewSheetTitle.value = c.display_name || c.category_code;
+  viewSheetHands.value = [];
+  viewSheetTab.value = "all";
+  viewHandQuery.value = "";
+  viewSpotQuery.value = "";
+  viewFocusSpot.value = "";
+  viewSheetOpen.value = true;
+  try {
+    const detail = await adminFetch<{
+      code: string;
+      name: string;
+      hand_count: number;
+      hands?: AppHandRow[];
+    }>(`/v3/admin/app-categories/${encodeURIComponent(c.category_code)}`);
+    viewSheetHands.value = Array.isArray(detail.hands) ? detail.hands : [];
+    viewSheetTitle.value = detail.name || c.display_name || c.category_code;
+    c.hand_count = detail.hand_count;
+  } catch (e) {
+    uni.showToast({
+      title: e instanceof Error ? e.message : "加载手牌失败",
+      icon: "none",
+    });
+  }
+}
+
+function closeViewCommentarySheet() {
+  viewSheetOpen.value = false;
+}
+
+const viewFilteredHands = computed(() => {
+  const q = viewHandQuery.value.trim().toLowerCase();
+  if (!q) return viewSheetHands.value;
+  return viewSheetHands.value.filter((h) => {
+    const slug = `${h.i}-${h.hero_seat}`;
+    const spot = (h.spot_code || "").toLowerCase();
+    return (
+      slug.includes(q) ||
+      h.phhs_key.toLowerCase().includes(q) ||
+      spot.includes(q)
+    );
+  });
+});
+
+const viewSpotGroups = computed(() => {
+  const q = viewSpotQuery.value.trim().toLowerCase();
+  const map = new Map<string, AppHandRow[]>();
+  for (const h of viewSheetHands.value) {
+    const spot = spotKeyOf(h);
+    if (q && !spot.toLowerCase().includes(q)) continue;
+    const rows = map.get(spot) || [];
+    rows.push(h);
+    map.set(spot, rows);
+  }
+  return [...map.entries()]
+    .map(([spot, hands]) => ({ spot, hands }))
+    .sort((a, b) => a.spot.localeCompare(b.spot));
+});
+
+const viewFocusSpotHands = computed(() => {
+  if (!viewFocusSpot.value) return [];
+  return viewSheetHands.value.filter((h) => spotKeyOf(h) === viewFocusSpot.value);
+});
+
+function openHandArtifact(h: AppHandRow) {
+  const q = [
+    `phhs_key=${encodeURIComponent(h.phhs_key)}`,
+    `i=${h.i}`,
+    `hero_seat=${h.hero_seat}`,
+  ];
+  if (h.spot_code) q.push(`spot=${encodeURIComponent(h.spot_code)}`);
+  uni.navigateTo({
+    url: `/pages/admin/hand-artifact?${q.join("&")}`,
+  });
 }
 
 function toggleHandSelect(h: AppHandRow) {
@@ -1526,7 +2136,16 @@ async function openGenerateSheetForCategory(c: CategoryPricingItem) {
   generateTarget.value = c;
   generateLimit.value = String(Math.min(500, Math.max(1, c.hand_count)));
   generateForce.value = false;
+  forceOverwriteModels.value = ["dummy"];
+  commentaryWay.value = "oneshot";
   await loadCommentaryModels();
+  if (
+    !forceOverwriteModels.value.some((id) =>
+      commentaryModels.value.some((m) => m.id === id),
+    )
+  ) {
+    resetOverwriteModelsToDummy();
+  }
   generateSheetOpen.value = true;
 }
 
@@ -1546,6 +2165,10 @@ async function startGenerateJob() {
     uni.showToast({ title: "没有可生成的手牌", icon: "none" });
     return;
   }
+  if (generateForce.value && !forceOverwriteModels.value.length) {
+    uni.showToast({ title: "请勾选可覆盖的模型", icon: "none" });
+    return;
+  }
   generating.value = true;
   try {
     const job = await adminFetch<JobItem>(
@@ -1555,7 +2178,11 @@ async function startGenerateJob() {
         data: {
           limit: generateCap.value,
           force: generateForce.value,
+          force_overwrite_models: generateForce.value
+            ? [...forceOverwriteModels.value]
+            : [],
           model: generateModelId.value,
+          commentary_way: commentaryWay.value,
           concurrency: generateConcurrencyCap.value,
         },
       },
@@ -1572,6 +2199,111 @@ async function startGenerateJob() {
     });
   } finally {
     generating.value = false;
+  }
+}
+
+async function loadTtsVoices() {
+  try {
+    const data = await adminFetch<{
+      available?: boolean;
+      default_voice?: string;
+      voices?: { id: string; label: string }[];
+    }>("/v3/admin/tts/voices");
+    ttsVoicesAvailable.value = data.available !== false;
+    if (Array.isArray(data.voices) && data.voices.length) {
+      ttsVoiceOptions.value = data.voices.map((v) => ({
+        id: v.id,
+        label: v.label || v.id,
+      }));
+    }
+    const def = (data.default_voice || "").trim();
+    if (def && ttsVoiceOptions.value.some((v) => v.id === def)) {
+      voiceId.value = def;
+    } else if (
+      ttsVoiceOptions.value.length &&
+      !ttsVoiceOptions.value.some((v) => v.id === voiceId.value)
+    ) {
+      voiceId.value = ttsVoiceOptions.value[0].id;
+    }
+  } catch {
+    ttsVoicesAvailable.value = true;
+  }
+}
+
+function onVoicePickChange(e: { detail?: { value?: string | number } }) {
+  const i = Number(e?.detail?.value ?? 0);
+  const opt = ttsVoiceOptions.value[i];
+  if (opt) voiceId.value = opt.id;
+}
+
+function setVoiceLimitAllHands() {
+  if (voiceTargetHandCount.value <= 0) {
+    uni.showToast({ title: "分类没有手牌", icon: "none" });
+    return;
+  }
+  voiceLimit.value = String(voiceLimitAllHands.value);
+}
+
+async function openVoiceSheetForCategory(c: CategoryPricingItem) {
+  if (!c.hand_count) {
+    uni.showToast({ title: "分类没有手牌", icon: "none" });
+    return;
+  }
+  voiceTarget.value = c;
+  voiceLimit.value = String(Math.min(500, Math.max(1, c.hand_count)));
+  voiceForce.value = false;
+  voiceConcurrency.value = "2";
+  await loadTtsVoices();
+  voiceSheetOpen.value = true;
+}
+
+function closeVoiceSheet() {
+  if (voiceGenerating.value) return;
+  voiceSheetOpen.value = false;
+  voiceTarget.value = null;
+}
+
+async function startVoiceJob() {
+  const target = voiceTarget.value;
+  if (!target) {
+    uni.showToast({ title: "未选择分类", icon: "none" });
+    return;
+  }
+  if (plannedVoiceCount.value <= 0) {
+    uni.showToast({ title: "没有可生成的手牌", icon: "none" });
+    return;
+  }
+  if (!ttsVoicesAvailable.value) {
+    uni.showToast({ title: "edge-tts 不可用", icon: "none" });
+    return;
+  }
+  voiceGenerating.value = true;
+  try {
+    const job = await adminFetch<JobItem>(
+      `/v3/admin/app-categories/${encodeURIComponent(target.category_code)}/generate-voice`,
+      {
+        method: "POST",
+        data: {
+          limit: voiceCap.value,
+          force: voiceForce.value,
+          provider: "edge",
+          voice: voiceId.value,
+          concurrency: voiceConcurrencyCap.value,
+        },
+      },
+    );
+    voiceSheetOpen.value = false;
+    voiceTarget.value = null;
+    uni.showToast({ title: `任务 #${job.id} 已排队`, icon: "success" });
+    tab.value = "jobs";
+    await loadJobs();
+  } catch (e) {
+    uni.showToast({
+      title: e instanceof Error ? e.message : "排队失败",
+      icon: "none",
+    });
+  } finally {
+    voiceGenerating.value = false;
   }
 }
 
@@ -1650,6 +2382,7 @@ function addCategoryRow() {
     display_name: code,
     access_threshold: 0,
     is_experience: false,
+    publish_status: "draft",
     in_catalog: false,
     hand_count: 0,
     taxonomy_id: catalogMeta.value?.primary_taxonomy || "",
@@ -1685,28 +2418,21 @@ async function deleteCategory(c: CategoryPricingItem) {
   uni.showToast({ title: "已删除", icon: "success" });
 }
 
-async function loadContent() {
-  const params = new URLSearchParams();
-  params.set("limit", "50");
-  const spot = contentSpotFilter.value.trim();
-  if (spot) params.set("spot_code", spot);
-  contentItems.value = await adminFetch<ContentItem[]>(
-    `/v3/admin/content?${params.toString()}`,
+async function setCategoryStatus(c: CategoryPricingItem, status: string) {
+  const saved = await adminFetch<CategoryPricingItem>(
+    `/v3/admin/categories/${encodeURIComponent(c.category_code)}/status`,
+    {
+      method: "PATCH",
+      data: { status },
+    },
   );
-}
-
-async function importDisk() {
-  await adminFetch("/v3/admin/content/sync-from-disk", { method: "POST" });
-  uni.showToast({ title: "已创建导入任务", icon: "none" });
-  await loadJobs();
-}
-
-async function setStatus(id: number, status: string) {
-  await adminFetch(`/v3/admin/content/${id}/status`, {
-    method: "PATCH",
-    data: { status },
+  const idx = categories.value.findIndex((x) => x.category_code === c.category_code);
+  if (idx >= 0) categories.value[idx] = saved;
+  else categories.value.push(saved);
+  uni.showToast({
+    title: publishStatusLabel(saved.publish_status),
+    icon: "none",
   });
-  await loadContent();
 }
 
 async function loadJobs() {
@@ -2428,6 +3154,46 @@ onUnmounted(() => {
   color: rgba(148, 163, 184, 0.95);
   word-break: break-all;
 }
+.hands-row--link {
+  cursor: pointer;
+}
+.hands-row--link:active {
+  background: rgba(34, 197, 94, 0.08);
+}
+.hands-row-top {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+.hands-row-spot {
+  font-size: 20rpx;
+  color: #64748b;
+  word-break: break-all;
+}
+.view-status {
+  flex-shrink: 0;
+  font-size: 20rpx;
+  padding: 2rpx 10rpx;
+  border-radius: 999rpx;
+}
+.view-status--ok {
+  color: #86efac;
+  background: rgba(22, 163, 74, 0.2);
+}
+.view-status--miss {
+  color: #94a3b8;
+  background: rgba(148, 163, 184, 0.12);
+}
+.view-spot-hands {
+  margin-top: 16rpx;
+}
+.hands-list--nested {
+  max-height: 420rpx;
+  margin-top: 8rpx;
+}
 .append-cat-list {
   max-height: 360rpx;
   margin-top: 8rpx;
@@ -2590,6 +3356,48 @@ onUnmounted(() => {
   color: #052e16;
   background: #86efac;
   border-color: #86efac;
+}
+.sheet-chip-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12rpx;
+  flex-shrink: 0;
+}
+.sheet-chip-row--wrap {
+  flex-wrap: wrap;
+  margin-bottom: 8rpx;
+}
+.overwrite-model-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  margin-bottom: 8rpx;
+}
+.overwrite-model-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 16rpx;
+  padding: 16rpx 18rpx;
+  border-radius: 12rpx;
+  background: rgba(15, 23, 42, 0.45);
+  border: 1rpx solid rgba(148, 163, 184, 0.12);
+}
+.overwrite-model-main {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12rpx;
+  min-width: 0;
+  flex: 1;
+}
+.overwrite-model-label {
+  font-size: 26rpx;
+  color: #e2e8f0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .sheet-picker {
   display: flex;

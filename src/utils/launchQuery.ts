@@ -57,7 +57,13 @@ export function hasLaunchIdParams(q: LaunchQueryParams): boolean {
   return Boolean(k && id);
 }
 
-/** 同时有 k、i 时首屏 CommentaryLite 用 URL 参数，否则默认 all / -1 */
+/** 仅有 k（分类列表）：首屏用该列表随机一手（i=-1） */
+export function hasLaunchListParams(q: LaunchQueryParams): boolean {
+  if (hasLaunchIdParams(q)) return false;
+  return Boolean(q.k?.trim());
+}
+
+/** 同时有 k、i 时首屏 CommentaryLite 用 URL 参数 */
 export function hasLaunchHandParams(q: LaunchQueryParams): boolean {
   if (hasLaunchIdParams(q)) return false;
   const k = q.k?.trim();

@@ -14,7 +14,6 @@
               <text v-if="bbRealAnchorText" class="bb-real-anchor">{{
                 bbRealAnchorText
               }}</text>
-              <text class="street-tag">{{ streetZh }}</text>
             </view>
             <view class="community-row">
               <PokerCard
@@ -39,7 +38,7 @@
             }"
             @tap="onTapRow(p.seatIndex)"
           >
-            <view class="player-top">
+            <view class="player-top player-top--trail-row">
               <view class="player-info">
                 <view class="title-line">
                   <view
@@ -51,11 +50,19 @@
                   <text class="p-name">{{ p.name }}</text>
                 </view>
                 <view class="p-meta-line">
-                  <text class="p-meta-val">{{ p.stack }}</text>
+                  <view class="p-meta-group">
+                    <view class="p-chip-ico p-chip-ico--stack" aria-hidden="true"></view>
+                    <text class="p-meta-val">{{ p.stack }}</text>
+                  </view>
                   <text class="p-meta-sep">·</text>
-                  <text class="p-meta-val" :class="{ 'bet-on': p.bet > 0 }">{{
-                    p.bet
-                  }}</text>
+                  <view class="p-meta-group">
+                    <view class="p-chip-ico p-chip-ico--bet" aria-hidden="true"></view>
+                    <text
+                      class="p-bet-inline p-meta-val"
+                      :class="{ 'bet-on': p.bet > 0 }"
+                      >{{ p.bet }}</text
+                    >
+                  </view>
                 </view>
               </view>
               <view
@@ -84,26 +91,48 @@
                   </view>
                 </view>
               </view>
-              <!-- 点手牌：定 Hero + 弹选牌 -->
-              <view class="hole-row" @tap.stop="onTapHole(p.seatIndex)">
-                <PokerCard :code="p.hole[0]" size="lg" />
-                <PokerCard :code="p.hole[1]" size="lg" />
+              <view class="player-cards-block" @tap.stop="onTapHole(p.seatIndex)">
+                <view class="hole-row">
+                  <PokerCard :code="p.hole[0]" size="lg" />
+                  <PokerCard :code="p.hole[1]" size="lg" />
+                </view>
               </view>
             </view>
           </view>
         </view>
 
-        <view class="panel panel-work">
-          <text class="work-head">{{ stepHeadline }}</text>
+        <view class="panel panel-narration panel-work">
+          <template v-if="phase === 'reviewing'">
+            <view class="nar-head-row">
+              <view
+                class="nar-step-hit"
+                :class="{ 'nar-step-hit--disabled': !hasPrevDecision }"
+                @tap.stop="goPrevDecision"
+              >
+                <text class="nar-step-glyph">‹</text>
+              </view>
+              <view class="nar-head-center-wrap">
+                <text class="nar-head nar-head-center nar-head-inline">{{
+                  stepHeadline
+                }}</text>
+              </view>
+              <view
+                class="nar-step-hit"
+                :class="{ 'nar-step-hit--disabled': !hasNextDecision }"
+                @tap.stop="goNextDecision"
+              >
+                <text class="nar-step-glyph">›</text>
+              </view>
+            </view>
+          </template>
+          <text v-else class="work-head">{{ stepHeadline }}</text>
           <text v-if="errorMessage" class="warn-line">{{ errorMessage }}</text>
 
+          <view class="nar-body-wrap">
           <template v-if="phase === 'entry' && entryStep === 'hero_seat'">
             <text class="work-body">点击列表行选择 Hero 座位，选完自动进入选手牌。</text>
             <view class="street-advance" :class="{ 'street-advance--busy': loading }" @tap="openPastePhh">
               <text class="street-advance-txt">粘贴 PHH 导入</text>
-            </view>
-            <view class="street-advance" :class="{ 'street-advance--busy': loading }" @tap="openArtifactLoad">
-              <text class="street-advance-txt">按产物 ID 加载点评</text>
             </view>
           </template>
 
@@ -165,45 +194,40 @@
             >
           </template>
 
-          <template v-else-if="phase === 'reviewing' && !currentReview">
-            <text class="work-body"
-              >点评未加载（共 {{ reviews.length }} 条）。若分析已在服务端完成，请用「按产物 ID
-              加载点评」。</text
-            >
+          <template v-else-if="phase === 'reviewing' && !reviews.length">
+            <text class="nar-body nar-muted">点评未加载。</text>
           </template>
 
           <template v-else-if="phase === 'reviewing' && currentReview">
             <view class="review-head-row">
               <text
+                v-if="currentReview.kind !== 'summary'"
                 class="verdict-pill"
                 :class="`verdict-pill--${currentReview.verdict}`"
                 >{{ verdictZh(currentReview.verdict) }}</text
               >
-              <text class="review-progress"
-                >{{ reviewCursor + 1 }} / {{ reviews.length }}</text
-              >
+              <text v-else class="review-progress">整手总结</text>
             </view>
             <text v-if="analyzeWarnings.length" class="warn-line">{{
               analyzeWarnings.join("；")
             }}</text>
             <template v-if="currentReview.kind === 'summary'">
-              <text class="actual-line">整手总结</text>
               <text
                 v-if="currentReview.outcome_zh"
-                class="rec-line"
+                class="nar-body"
                 >{{ currentReview.outcome_zh }}</text
               >
               <text
                 v-if="currentReview.opponent_shown"
-                class="rec-line"
+                class="nar-body"
                 >对手亮牌 {{ currentReview.opponent_shown }}</text
               >
             </template>
             <template v-else>
-              <text class="actual-line"
+              <text class="nar-body"
                 >实际 {{ currentReview.actual.label }}</text
               >
-              <text class="rec-line"
+              <text class="nar-body nar-rec"
                 >推荐 {{ currentReview.recommend.label }}</text
               >
               <view v-if="currentReview.options?.length" class="options-row">
@@ -219,27 +243,34 @@
                 >
               </view>
             </template>
+            <text
+              v-for="(r, i) in currentReview.reasons"
+              :key="'reason-' + i"
+              class="nar-body"
+              >{{ r }}</text
+            >
             <view v-if="currentReview.balance?.notes?.length" class="balance-block">
               <text class="balance-head">平衡视角（混合 / 诈唬）</text>
               <text
                 v-if="currentReview.balance.alt?.label"
-                class="balance-alt-line"
+                class="nar-body"
                 >混合可选 {{ currentReview.balance.alt.label }}</text
               >
               <text
                 v-for="(b, j) in currentReview.balance.notes"
                 :key="'bal-' + j"
-                class="balance-line"
+                class="nar-body"
                 >{{ b }}</text
               >
             </view>
-            <text
-              v-for="(r, i) in currentReview.reasons"
-              :key="'reason-' + i"
-              class="reason-line"
-              >{{ r }}</text
-            >
           </template>
+
+          <template v-else-if="phase === 'reviewing'">
+            <text class="nar-body">{{
+              replayActionSummary || "此步无行动摘要"
+            }}</text>
+          </template>
+          </view>
         </view>
 
         <view class="scroll-pad"></view>
@@ -273,37 +304,6 @@
           @tap="confirmPastePhh"
         >
           导入牌谱
-        </button>
-      </view>
-    </view>
-
-    <view
-      v-if="artifactLoadVisible"
-      class="picker-mask"
-      @tap="closeArtifactLoad"
-    >
-      <view class="picker-sheet paste-phh-sheet" @tap.stop>
-        <view class="picker-top">
-          <text class="picker-title">加载已有点评</text>
-          <text class="picker-close" @tap="closeArtifactLoad">关闭</text>
-        </view>
-        <text class="paste-phh-hint"
-          >输入落盘目录名（如
-          20260823010950_f47300219aa7d451acb3bf16），从服务端读取 review.json。</text
-        >
-        <textarea
-          class="paste-phh-area paste-phh-area--single"
-          v-model="artifactIdDraft"
-          placeholder="YYYYMMDDHHMMSS_xxxxxxxxxxxxxxxxxxxxxxxx"
-          :maxlength="64"
-        />
-        <button
-          class="picker-confirm"
-          :disabled="loading || !artifactIdDraft.trim()"
-          :loading="loading"
-          @tap="confirmArtifactLoad"
-        >
-          加载点评
         </button>
       </view>
     </view>
@@ -387,7 +387,7 @@
       </view>
     </view>
 
-    <view class="dock">
+    <AppTabBar active="review">
       <template v-if="phase === 'entry'">
         <view class="dock-row">
           <button class="dock-btn dock-btn--ghost" @tap="requestReset">
@@ -436,35 +436,16 @@
           撤销上一行动
         </button>
       </template>
-      <template v-else>
-        <view class="dock-row">
-          <button
-            class="dock-btn dock-btn--ghost"
-            :disabled="!hasPrevDecision"
-            @tap="goPrevDecision"
-          >
-            上一决策
-          </button>
-          <button
-            class="dock-btn dock-btn--ghost"
-            :disabled="!hasNextDecision"
-            @tap="goNextDecision"
-          >
-            下一决策
-          </button>
-        </view>
-        <button class="dock-btn dock-btn--secondary" @tap="backToEntry">
-          返回录入
-        </button>
-      </template>
-      <AppTabBar active="review" />
-      <view class="dock-safe"></view>
-    </view>
+      <view v-else class="dock-review-bar">
+        <text class="dock-back-link" @tap="backToEntry">← 返回录入</text>
+      </view>
+    </AppTabBar>
   </view>
 </template>
 
 <script setup lang="ts">
 import { computed, ref } from "vue";
+import { onLoad } from "@dcloudio/uni-app";
 import AppTabBar from "@/components/AppTabBar.vue";
 import PokerCard from "@/components/PokerCard.vue";
 import { useHandReview } from "@/composables/useHandReview";
@@ -490,8 +471,6 @@ const suits = CARD_SUITS;
 
 const pastePhhVisible = ref(false);
 const pastePhhText = ref("");
-const artifactLoadVisible = ref(false);
-const artifactIdDraft = ref("");
 
 const {
   phase,
@@ -505,7 +484,6 @@ const {
   loading,
   errorMessage,
   reviews,
-  reviewCursor,
   analyzeWarnings,
   heroCardsReady,
   showdownCardsReady,
@@ -522,8 +500,8 @@ const {
   tablePlayers,
   blindsLevelText,
   bbRealAnchorText,
-  streetZh,
   stepHeadline,
+  replayActionSummary,
   nextActorSeat,
   legalActions,
   usedCardCodes,
@@ -549,7 +527,7 @@ const {
   requestReset,
   importFromPhh,
   startReview,
-  loadReviewArtifact,
+  loadReviewHand,
   goPrevDecision,
   goNextDecision,
   backToEntry,
@@ -571,18 +549,12 @@ async function confirmPastePhh() {
   }
 }
 
-function openArtifactLoad() {
-  artifactLoadVisible.value = true;
-}
-
-function closeArtifactLoad() {
-  artifactLoadVisible.value = false;
-}
-
-async function confirmArtifactLoad() {
-  const ok = await loadReviewArtifact(artifactIdDraft.value);
-  if (ok) artifactLoadVisible.value = false;
-}
+onLoad((options) => {
+  const artifact = (options?.artifact as string) || "";
+  if (artifact) {
+    loadReviewHand(artifact);
+  }
+});
 
 const boardSlots = computed(() => {
   const b = snapshot.value?.board;
@@ -739,18 +711,26 @@ $felt: #0f3d26;
 $panel: rgba(255, 255, 255, 0.07);
 $panel-border: rgba(255, 255, 255, 0.14);
 $pot-yellow: #fbbf24;
-$dock-bg: rgba(15, 61, 38, 0.96);
+// #ifdef H5
+$tab-bar-h: 128rpx;
+// #endif
+// #ifndef H5
 $tab-bar-h: 88rpx;
+// #endif
 
 .page-root {
   width: 100%;
   max-width: 480px;
   margin: 0 auto;
-  height: 100vh;
+  height: 100%;
   display: flex;
   flex-direction: column;
   background: $felt;
   overflow: hidden;
+  box-sizing: border-box;
+  /* #ifdef MP-WEIXIN */
+  min-height: 100vh;
+  /* #endif */
 }
 
 .page-scroll {
@@ -760,8 +740,9 @@ $tab-bar-h: 88rpx;
 }
 
 .page-inner {
-  padding: 16rpx 24rpx 0;
+  padding: 16rpx 20rpx 0;
   padding-bottom: calc(200rpx + #{$tab-bar-h} + env(safe-area-inset-bottom));
+  box-sizing: border-box;
 }
 
 .panel {
@@ -775,16 +756,20 @@ $tab-bar-h: 88rpx;
   padding: 16rpx 18rpx;
 }
 
-.panel-players {
-  padding: 12rpx 14rpx;
+.panel.panel-players {
+  padding: 0;
+  margin-bottom: 16rpx;
 }
 
+.panel.panel-narration,
 .panel-work {
-  padding: 20rpx 22rpx 24rpx;
+  padding: 16rpx 18rpx;
+  margin-bottom: 18rpx;
 }
 
 .board-row {
   display: flex;
+  flex-direction: row;
   align-items: center;
   justify-content: space-between;
   gap: 16rpx;
@@ -793,7 +778,9 @@ $tab-bar-h: 88rpx;
 .board-pot-col {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: 8rpx;
+  flex-shrink: 0;
 }
 
 .pot-bar {
@@ -804,33 +791,36 @@ $tab-bar-h: 88rpx;
 }
 
 .pot-text {
-  font-size: 26rpx;
-  font-weight: 700;
+  font-size: 24rpx;
+  font-weight: 600;
   color: $pot-yellow;
 }
 
-.blinds-level,
-.street-tag {
+.blinds-level {
   font-size: 20rpx;
   font-weight: 600;
   color: rgba(226, 232, 240, 0.88);
+  letter-spacing: 0.04em;
+  padding-left: 2rpx;
 }
 
 .bb-real-anchor {
   font-size: 18rpx;
   font-weight: 500;
   color: rgba(148, 163, 184, 0.92);
-}
-
-.street-tag {
-  color: #86efac;
+  letter-spacing: 0.02em;
+  padding-left: 2rpx;
 }
 
 .community-row {
   display: flex;
+  flex-direction: row;
   flex: 1;
+  min-width: 0;
   justify-content: flex-end;
-  gap: 10rpx;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 14rpx;
 }
 
 .community-row :deep(.pc.lg),
@@ -844,124 +834,225 @@ $tab-bar-h: 88rpx;
 }
 
 .player-card {
-  background: rgba(0, 0, 0, 0.18);
-  border-radius: 16rpx;
+  background: rgba(0, 0, 0, 0.12);
+  border-radius: 0;
   padding: 14rpx 12rpx;
-  margin-bottom: 10rpx;
-  border: 1rpx solid transparent;
+  margin-bottom: 0;
+  border: 2rpx solid transparent;
+  min-height: 108rpx;
+  box-sizing: border-box;
+}
+
+.player-card:first-child {
+  border-top-left-radius: 12rpx;
+  border-top-right-radius: 12rpx;
 }
 
 .player-card:last-child {
-  margin-bottom: 0;
+  border-bottom-left-radius: 12rpx;
+  border-bottom-right-radius: 12rpx;
 }
 
 .player-card.focus {
-  border-color: rgba(251, 191, 36, 0.55);
+  border-color: #facc15;
+  box-shadow: 0 0 0 2rpx rgba(250, 204, 21, 0.25);
 }
 
 .player-card--hero {
-  background: rgba(46, 125, 50, 0.28);
+  background: rgba(250, 204, 21, 0.16);
+  border-color: rgba(250, 204, 21, 0.32);
+}
+
+.player-card--hero.focus {
+  background: rgba(250, 204, 21, 0.22);
 }
 
 .player-card.replay-folded {
-  opacity: 0.45;
+  opacity: 0.52;
 }
 
 .player-top {
-  display: flex;
-  flex-direction: row;
+  display: grid;
+  grid-template-columns: 280rpx 200rpx 1fr;
   align-items: center;
-  gap: 12rpx;
+  column-gap: 12rpx;
+  min-height: 88rpx;
+}
+
+.player-top.player-top--trail-row {
+  grid-template-columns: 280rpx auto minmax(156rpx, auto);
+  column-gap: 8rpx;
 }
 
 .player-info {
-  flex: 0 0 160rpx;
+  width: 280rpx;
+  max-width: 280rpx;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8rpx;
+  box-sizing: border-box;
 }
 
 .title-line {
   display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 8rpx;
-  margin-bottom: 6rpx;
+  flex: 1;
+  min-width: 0;
+  margin-bottom: 0;
 }
 
 .pos-badge {
-  border-radius: 8rpx;
-  padding: 2rpx 8rpx;
-  background: #334155;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40rpx;
+  height: 26rpx;
+  padding: 0 6rpx;
+  border-radius: 6rpx;
+  box-sizing: border-box;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1rpx solid rgba(255, 255, 255, 0.2);
 }
 
 .pos-badge-txt {
-  font-size: 18rpx;
+  font-size: 15rpx;
   font-weight: 700;
-  color: #f8fafc;
+  color: rgba(255, 255, 255, 0.95);
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .pos-badge--SB {
-  background: #0369a1;
+  background: rgba(148, 163, 184, 0.32);
+  border-color: rgba(203, 213, 225, 0.42);
 }
 .pos-badge--BB {
-  background: #b45309;
+  background: rgba(251, 191, 36, 0.22);
+  border-color: rgba(251, 191, 36, 0.48);
 }
 .pos-badge--UTG {
-  background: #4c1d95;
+  background: rgba(56, 189, 248, 0.2);
+  border-color: rgba(56, 189, 248, 0.45);
 }
 .pos-badge--MP {
-  background: #0f766e;
+  background: rgba(99, 102, 241, 0.22);
+  border-color: rgba(129, 140, 248, 0.45);
 }
 .pos-badge--CO {
-  background: #9f1239;
+  background: rgba(52, 211, 153, 0.2);
+  border-color: rgba(52, 211, 153, 0.45);
 }
 .pos-badge--BTN {
-  background: #a16207;
+  background: rgba(250, 204, 21, 0.22);
+  border-color: rgba(250, 204, 21, 0.5);
 }
 
 .p-name {
   font-size: 24rpx;
-  font-weight: 600;
-  color: #e2e8f0;
+  font-weight: 700;
+  color: #fff;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .p-meta-line {
   display: flex;
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: nowrap;
+  font-size: 20rpx;
+  color: rgba(255, 255, 255, 0.78);
+  line-height: 1.45;
+}
+
+.p-meta-group {
+  display: flex;
+  flex-direction: row;
   align-items: center;
   gap: 6rpx;
+  flex-shrink: 0;
+}
+
+.p-chip-ico {
+  width: 22rpx;
+  height: 22rpx;
+  border-radius: 50%;
+  border: 2rpx solid rgba(0, 0, 0, 0.3);
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.p-chip-ico--stack {
+  background: linear-gradient(145deg, #6ee7b7 0%, #059669 55%, #047857 100%);
+  box-shadow:
+    inset 0 1rpx 3rpx rgba(255, 255, 255, 0.4),
+    0 1rpx 2rpx rgba(0, 0, 0, 0.2);
+}
+
+.p-chip-ico--bet {
+  background: linear-gradient(145deg, #fda4af 0%, #e11d48 55%, #9f1239 100%);
+  box-shadow:
+    inset 0 1rpx 3rpx rgba(255, 255, 255, 0.35),
+    0 1rpx 2rpx rgba(0, 0, 0, 0.2);
 }
 
 .p-meta-val {
-  font-size: 22rpx;
-  color: #cbd5e1;
-}
-
-.p-meta-val.bet-on {
-  color: $pot-yellow;
-  font-weight: 700;
+  flex-shrink: 0;
 }
 
 .p-meta-sep {
-  color: #64748b;
+  margin: 0 6rpx;
+  color: rgba(255, 255, 255, 0.35);
+  flex-shrink: 0;
+}
+
+.p-bet-inline {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.p-bet-inline.bet-on {
+  color: #fde047;
+  font-weight: 700;
 }
 
 .player-action-trail {
-  flex: 1;
+  width: 200rpx;
+  max-width: 200rpx;
   min-width: 0;
+  align-self: center;
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  box-sizing: border-box;
 }
 
-.player-action-trail--street {
-  flex-shrink: 0;
+.player-action-trail.player-action-trail--street {
+  width: auto;
   max-width: none;
+  justify-self: start;
+  align-self: center;
+  flex-shrink: 0;
+  margin-left: -52rpx;
+  margin-right: 20rpx;
 }
 
-.action-trail-street-grid {
+.player-action-trail--street .action-trail-street-grid {
   display: grid;
   align-items: start;
   box-sizing: border-box;
 }
 
-.action-trail-street-col {
+.player-action-trail--street .action-trail-street-col {
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -971,65 +1062,142 @@ $tab-bar-h: 88rpx;
 
 .action-trail-item {
   display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  align-self: flex-start;
+  flex-shrink: 0;
+  width: 100%;
+  max-width: 100%;
   background: #2563eb;
   border-radius: 8rpx;
-  padding: 4rpx 6rpx;
+  padding: 6rpx 12rpx;
   box-sizing: border-box;
-  width: 100%;
+  overflow: hidden;
 }
 
-.action-trail-item--stacked {
+.player-action-trail--street .action-trail-street-col .action-trail-item {
+  width: 100%;
+  padding: 4rpx 4rpx;
+  box-sizing: border-box;
+}
+
+.player-action-trail--street .action-trail-item.action-trail-item--stacked {
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 2rpx;
+  padding: 4rpx 4rpx;
+  box-sizing: border-box;
 }
 
 .action-trail-label {
-  font-size: 18rpx;
-  font-weight: 700;
+  font-size: 28rpx;
+  font-weight: 600;
   color: #fff;
+  line-height: 1.2;
+  white-space: nowrap;
+  text-align: left;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.player-action-trail--street .action-trail-item--stacked .action-trail-label {
+  display: block;
+  width: 100%;
+  font-size: 22rpx;
   line-height: 1.15;
+  white-space: nowrap;
   text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .action-trail-chips {
-  font-size: 16rpx;
+  display: block;
+  width: 100%;
+  font-size: 18rpx;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.92);
   line-height: 1.1;
+  white-space: nowrap;
   text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.player-action-trail--street-cols-3 .action-trail-label,
-.player-action-trail--street-cols-4 .action-trail-label {
+.player-action-trail--street-cols-3 .action-trail-item--stacked .action-trail-label {
+  font-size: 20rpx;
+}
+
+.player-action-trail--street-cols-3 .action-trail-chips {
+  font-size: 17rpx;
+}
+
+.player-action-trail--street-cols-4 .action-trail-item--stacked .action-trail-label {
+  font-size: 19rpx;
+}
+
+.player-action-trail--street-cols-4 .action-trail-chips {
   font-size: 16rpx;
 }
 
-.player-action-trail--street-cols-3 .action-trail-chips,
-.player-action-trail--street-cols-4 .action-trail-chips {
-  font-size: 14rpx;
+.player-cards-block {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  justify-self: end;
+  gap: 10rpx;
+  min-width: 0;
+  width: auto;
 }
 
 .hole-row {
   display: flex;
-  gap: 8rpx;
+  flex-direction: row;
+  gap: 14rpx;
   flex-shrink: 0;
-  padding: 4rpx;
-  border-radius: 10rpx;
 }
 
 .work-head {
   display: block;
-  font-size: 28rpx;
+  font-size: 30rpx;
   font-weight: 700;
   color: #e2e8f0;
+  line-height: 1.45;
   margin-bottom: 10rpx;
+}
+
+.nar-body-wrap {
+  min-height: 120rpx;
+  box-sizing: border-box;
+}
+
+.nar-body {
+  display: block;
+  font-size: 28rpx;
+  color: #cbd5e1;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin-bottom: 8rpx;
+}
+
+.nar-body.nar-rec {
+  font-weight: 700;
+  color: #86efac;
+}
+
+.nar-muted {
+  color: #64748b;
+  font-style: italic;
 }
 
 .work-body {
   display: block;
-  font-size: 24rpx;
+  font-size: 26rpx;
   color: #94a3b8;
   line-height: 1.5;
 }
@@ -1048,13 +1216,16 @@ $tab-bar-h: 88rpx;
 
 .amount-input {
   flex: 1;
-  height: 64rpx;
-  padding: 0 16rpx;
+  height: 88rpx;
+  min-height: 88rpx;
+  padding: 0 20rpx;
+  box-sizing: border-box;
   border-radius: 12rpx;
   background: rgba(0, 0, 0, 0.28);
   color: #f8fafc;
   border: 1rpx solid rgba(255, 255, 255, 0.14);
   font-size: 28rpx;
+  line-height: 88rpx;
 }
 
 .action-grid {
@@ -1139,21 +1310,6 @@ $tab-bar-h: 88rpx;
   color: #fca5a5;
 }
 
-.actual-line {
-  display: block;
-  font-size: 26rpx;
-  color: #e2e8f0;
-  margin-bottom: 8rpx;
-}
-
-.rec-line {
-  display: block;
-  font-size: 28rpx;
-  font-weight: 700;
-  color: #86efac;
-  margin-bottom: 14rpx;
-}
-
 .options-row {
   display: flex;
   flex-wrap: wrap;
@@ -1188,19 +1344,10 @@ $tab-bar-h: 88rpx;
   margin-bottom: 10rpx;
 }
 
-.reason-line {
-  display: block;
-  font-size: 26rpx;
-  color: #cbd5e1;
-  line-height: 1.55;
-  margin-bottom: 8rpx;
-}
-
 .balance-block {
-  margin: 12rpx 0 16rpx;
-  padding: 12rpx 0;
+  margin: 12rpx 0 0;
+  padding: 12rpx 0 0;
   border-top: 1rpx solid rgba(148, 163, 184, 0.35);
-  border-bottom: 1rpx solid rgba(148, 163, 184, 0.35);
 }
 
 .balance-head {
@@ -1208,21 +1355,6 @@ $tab-bar-h: 88rpx;
   font-size: 24rpx;
   color: #93c5fd;
   margin-bottom: 8rpx;
-}
-
-.balance-alt-line {
-  display: block;
-  font-size: 24rpx;
-  color: #a5b4fc;
-  margin-bottom: 6rpx;
-}
-
-.balance-line {
-  display: block;
-  font-size: 24rpx;
-  color: #94a3b8;
-  line-height: 1.5;
-  margin-bottom: 6rpx;
 }
 
 .scroll-pad {
@@ -1257,22 +1389,24 @@ $tab-bar-h: 88rpx;
 
 .paste-phh-area {
   width: 100%;
+  height: 360rpx;
   min-height: 360rpx;
   max-height: 46vh;
-  padding: 16rpx;
+  padding: 20rpx 24rpx;
   margin-bottom: 20rpx;
   box-sizing: border-box;
   border-radius: 14rpx;
   background: rgba(6, 40, 22, 0.85);
   border: 1rpx solid rgba(134, 239, 172, 0.35);
   color: #e2e8f0;
-  font-size: 24rpx;
-  line-height: 1.45;
+  font-size: 26rpx;
+  line-height: 1.5;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 .paste-phh-area--single {
-  min-height: 96rpx;
+  height: 120rpx;
+  min-height: 120rpx;
   max-height: 120rpx;
 }
 
@@ -1399,22 +1533,10 @@ $tab-bar-h: 88rpx;
   opacity: 0.4;
 }
 
-.dock {
-  position: fixed;
-  left: 50%;
-  transform: translateX(-50%);
-  bottom: 0;
-  width: 100%;
-  max-width: 480px;
-  box-sizing: border-box;
-  padding: 16rpx 24rpx calc(16rpx + env(safe-area-inset-bottom));
-  background: linear-gradient(180deg, transparent, $dock-bg 28%);
-  z-index: 20;
-}
-
 .dock-row {
   display: flex;
   gap: 12rpx;
+  margin-bottom: 12rpx;
 }
 
 .dock-row .dock-btn {
@@ -1423,9 +1545,9 @@ $tab-bar-h: 88rpx;
 
 .dock-btn {
   margin: 0;
-  height: 80rpx;
-  line-height: 80rpx;
-  border-radius: 16rpx;
+  height: 72rpx;
+  line-height: 72rpx;
+  border-radius: 14rpx;
   font-size: 26rpx;
   font-weight: 600;
   border: none;
@@ -1441,23 +1563,90 @@ $tab-bar-h: 88rpx;
 }
 
 .dock-btn--secondary {
-  margin-top: 12rpx;
+  margin-top: 0;
+  margin-bottom: 4rpx;
   width: 100%;
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.08);
   color: #e2e8f0;
 }
 
 .dock-btn--ghost {
-  background: rgba(15, 61, 38, 0.9);
+  background: transparent;
   color: #c8e6c9;
-  border: 1rpx solid rgba(200, 230, 201, 0.35);
+  border: 1rpx solid rgba(200, 230, 201, 0.28);
 }
 
 .dock-btn--ghost[disabled] {
   opacity: 0.35;
 }
 
-.dock-safe {
-  height: 4rpx;
+.dock-review-bar {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  min-height: 44rpx;
+  padding-bottom: 4rpx;
+}
+
+.dock-back-link {
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #38bdf8;
+  padding: 8rpx 16rpx;
+}
+
+.nar-head-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4rpx;
+  margin-bottom: 10rpx;
+}
+
+.nar-step-hit {
+  flex-shrink: 0;
+  width: 48rpx;
+  min-width: 48rpx;
+  height: 44rpx;
+  padding: 0;
+  margin: 0;
+  align-items: center;
+  justify-content: center;
+  display: flex;
+  box-sizing: border-box;
+  background: transparent;
+  border: none;
+}
+
+.nar-step-hit--disabled {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+.nar-step-glyph {
+  font-size: 36rpx;
+  font-weight: 600;
+  color: #38bdf8;
+  line-height: 1;
+}
+
+.nar-head-center-wrap {
+  flex: 1;
+  min-width: 0;
+}
+
+.nar-head {
+  display: block;
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #e2e8f0;
+  line-height: 1.45;
+  margin-bottom: 0;
+}
+
+.nar-head-inline {
+  white-space: normal;
+  word-break: break-word;
 }
 </style>

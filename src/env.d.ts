@@ -3,6 +3,7 @@
 interface ImportMetaEnv {
   readonly VITE_API_ORIGIN?: string;
   readonly VITE_COMMENTARY_DEV_PROXY_TARGET?: string;
+  readonly UNI_PLATFORM?: string;
 }
 
 interface ImportMeta {

@@ -51,6 +51,7 @@ Windows 也可双击 `start_local_server.bat` 启动 H5 开发服务。
 |---|---|
 | `npm run dev` / `npm run dev:h5` | H5 开发 |
 | `npm run dev:mp-weixin` | 微信小程序开发 |
+| **真机开发** | 双击 `scripts\dev-weixin-phone.bat`（自动写 IP、检查 API、编译） |
 | `npm run build:h5` | H5 生产构建，产物在 `dist/build/h5` |
 | `npm run build:mp-weixin` | 微信小程序构建 |
 | `npm run type-check` | TypeScript 类型检查 |
@@ -185,13 +186,19 @@ npm run build:h5
 
 ## 微信小程序
 
-1. `npm run dev:mp-weixin` 或 `npm run build:mp-weixin`
-2. 用微信开发者工具打开 **`dist/dev/mp-weixin`**（开发）或 **`dist/build/mp-weixin`**（生产）
-3. 修改源码后需重新 build，并在开发者工具中 **编译**；若界面像旧版，可 **清缓存 → 全部清除** 后再编译
-4. AppID 见 `src/manifest.json` → `mp-weixin.appid`
-5. 正式环境需在小程序后台配置合法 request 域名；手机预览/正式版需 **上传** 后才会更新（与本地 `dist` 无关）
+**真机开发只记一条：** 双击 `scripts\dev-weixin-phone.bat`
 
-H5 与小程序共用同一套源码；小程序不会自动热更新 `dist`，务必指向上述目录而非项目根目录。
+它会自动：检测本机局域网 IP → 写入 `.env.development.local` → 检查 API 是否可达 → 编译到 `dist/dev/mp-weixin`。
+
+1. 先启动后端：`pokerapp-phh_analysis_service\scripts\start-api.bat`（须 `0.0.0.0:9000`）
+2. 微信开发者工具导入 **`dist/dev/mp-weixin`**（不要用项目根目录，不要用 `dist/build`）
+3. **详情 → 本地设置 → 不校验合法域名**
+4. 点 **预览**，手机重新扫码
+5. 改代码后等终端 `Build complete`，开发者工具再点 **编译**
+
+若只做界面、不测本地 API，可在 `.env.development.local` 写 `VITE_API_ORIGIN=https://api.pokershow.top` 直连线上。
+
+H5 与小程序共用同一套源码；小程序不会自动热更新 `dist`，务必指向上述目录。
 
 ## 开发说明
 

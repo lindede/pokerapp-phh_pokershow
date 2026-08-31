@@ -18,6 +18,7 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
+import { consumeTabSwitchFlag } from "@/config/app-tab-bar";
 
 const PLURIBUS_URL = "https://zhuanlan.zhihu.com/p/97870891";
 const introBodyText =
@@ -55,6 +56,8 @@ function close() {
 
 onMounted(() => {
   if (props.skip) return;
+  // Tab 切换会预先打标；刷新 / 首次进入没有该标记 → 弹出
+  if (consumeTabSwitchFlag()) return;
   setTimeout(() => {
     visible.value = true;
   }, 300);

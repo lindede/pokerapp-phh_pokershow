@@ -1,0 +1,21 @@
+{
+  "description": "真机改 apiOrigin（电脑局域网 IP:9000），保存后等自动编译，再在微信里点编译/预览。",
+  "apiOrigin": "http://192.168.1.9:9000",
+  "packOptions": {
+    "ignore": [],
+    "include": []
+  },
+  "setting": {
+    "urlCheck": false,
+    "es6": true,
+    "postcss": false,
+    "minified": false,
+    "newFeature": true,
+    "bigPackageSizeSupport": true
+  },
+  "compileType": "miniprogram",
+  "libVersion": "",
+  "appid": "wx068cfd6099a06f9f",
+  "projectname": "博弈秀",
+  "condition": {}
+}

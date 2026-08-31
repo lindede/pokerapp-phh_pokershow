@@ -23,5 +23,14 @@ export function getReviewArtifactApiUrl(artifactId: string): string {
   return apiAbsoluteUrl(`/v2/Review/artifacts/${id}`);
 }
 
+export function getReviewArtifactEntryApiUrl(artifactId: string): string {
+  const id = encodeURIComponent(artifactId.trim());
+  return apiAbsoluteUrl(`/v2/Review/artifacts/${id}/entry`);
+}
+
+export function getReviewHandsListApiUrl(): string {
+  return apiAbsoluteUrl("/v2/Review/hands");
+}
+
 /** 兼容常量读取；实际请求请优先用 getReviewAnalyzeApiUrl() */
 export const REVIEW_ANALYZE_API_URL: string = getReviewAnalyzeApiUrl();

@@ -138,9 +138,25 @@ export function useAuth() {
         });
       });
       if (res.statusCode >= 200 && res.statusCode < 300 && res.data && user.value) {
-        const bal = (res.data as { balance?: number }).balance;
+        const body = res.data as {
+          balance?: number;
+          effective_balance?: number;
+          credits_expire_at?: string | null;
+        };
+        const bal = body.balance;
         if (typeof bal === "number") {
-          user.value = { ...user.value, credit_balance: bal };
+          user.value = {
+            ...user.value,
+            credit_balance: bal,
+            effective_balance:
+              typeof body.effective_balance === "number"
+                ? body.effective_balance
+                : user.value.effective_balance,
+            credits_expire_at:
+              body.credits_expire_at !== undefined
+                ? body.credits_expire_at
+                : user.value.credits_expire_at,
+          };
           return bal;
         }
       }

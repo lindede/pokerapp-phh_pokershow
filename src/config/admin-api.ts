@@ -111,6 +111,7 @@ export interface CategoryPricingItem {
   display_name: string;
   access_threshold: number;
   is_experience: boolean;
+  publish_status?: string;
   in_catalog: boolean;
   hand_count: number;
   taxonomy_id?: string;

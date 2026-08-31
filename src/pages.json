@@ -24,6 +24,38 @@
 				"enablePullDownRefresh": false
 			}
 		},
+		{
+			"path": "pages/profile/categories",
+			"style": {
+				"navigationBarTitleText": "牌局分类",
+				"navigationStyle": "default",
+				"enablePullDownRefresh": false
+			}
+		},
+		{
+			"path": "pages/profile/favorites",
+			"style": {
+				"navigationBarTitleText": "收藏",
+				"navigationStyle": "default",
+				"enablePullDownRefresh": false
+			}
+		},
+		{
+			"path": "pages/profile/reviews",
+			"style": {
+				"navigationBarTitleText": "复盘局",
+				"navigationStyle": "default",
+				"enablePullDownRefresh": false
+			}
+		},
+		{
+			"path": "pages/profile/redeem",
+			"style": {
+				"navigationBarTitleText": "兑换信用",
+				"navigationStyle": "default",
+				"enablePullDownRefresh": false
+			}
+		},
 		// #ifdef H5
 		{
 			"path": "pages/review-lab/index",
@@ -35,9 +67,27 @@
 			}
 		},
 		{
+			"path": "pages/commentary-lab/index",
+			"style": {
+				"navigationBarTitleText": "解说实验室",
+				"navigationStyle": "default",
+				"enablePullDownRefresh": false,
+				"disableScroll": true
+			}
+		},
+		{
 			"path": "pages/admin/index",
 			"style": {
 				"navigationBarTitleText": "数据管理",
+				"navigationStyle": "default",
+				"enablePullDownRefresh": false,
+				"disableScroll": true
+			}
+		},
+		{
+			"path": "pages/admin/hand-artifact",
+			"style": {
+				"navigationBarTitleText": "解说制品",
 				"navigationStyle": "default",
 				"enablePullDownRefresh": false
 			}

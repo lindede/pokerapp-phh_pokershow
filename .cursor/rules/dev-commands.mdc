@@ -1,0 +1,46 @@
+---
+description: 开发口令 — 用户说口令时立即启动对应服务，勿反复确认
+alwaysApply: true
+---
+
+# 开发口令（PHH Pokershow）
+
+用户发送下列**口令**（或同义短句）时，**直接执行**，不要先问「要不要启动」。
+
+执行前：看 `terminals/` 是否已有同类进程在跑；有则告知地址，避免重复起。
+
+长驻进程用后台启动（`block_until_ms: 0`）。完成后汇报：启动了什么、访问地址、还需用户手动做的步骤。
+
+改完小程序相关代码 / `project.config.json` 后：**立刻起或重启 `mp-phone`（`scripts\go.bat mp-phone`）**，不要只改文件就收工。
+
+## 口令表
+
+| 口令 | 执行 |
+|------|------|
+| **起 API** / **api** / **启动后端** | `d:\ldd\AI\gitws\pokerapp-phh_pokershow\scripts\go.bat api` |
+| **查 API** / **api通吗** / **检查接口** | `scripts\go.bat check-api`（先 `resolve-api-origin`） |
+| **起 H5** / **h5** / **浏览器** | `scripts\go.bat h5` → http://localhost:5173 |
+| **小程序** / **mp** / **微信开发** | `scripts\go.bat mp` → 导入 `dist\dev\mp-weixin` |
+| **真机** / **微信真机** / **mp真机** | `scripts\go.bat mp-phone` |
+| **打包小程序** / **mp包** | `scripts\go.bat mp-build` → `dist\build\mp-weixin` |
+| **起 worker** / **worker** | `scripts\go.bat worker` |
+| **一条龙** / **全套** / **真机全套** | `scripts\go.bat all-phone`（先 API 再 mp-phone） |
+
+## 固定路径（勿搞错）
+
+- 微信开发者工具导入：**`dist\dev\mp-weixin`**（开发）或 **`dist\build\mp-weixin`**（打包后）
+- 真机 API 地址：改仓库根目录 **`project.config.json`** 的 **`apiOrigin`**（保存后等 uni 编译再预览）
+- 后端仓库：`d:\ldd\AI\gitws\pokerapp-phh_analysis_service`
+- API 端口：**9000**，需 `--host 0.0.0.0`（`start-api.bat` 已配置）
+
+## 真机手动步骤（启动后简短提醒）
+
+1. 手机与电脑同一 WiFi
+2. 微信开发者工具：不校验合法域名 → 预览 → 手机重新扫码
+3. API 地址改根目录 `project.config.json` 的 `apiOrigin`
+
+## API 不通时
+
+1. 先 **起 API**
+2. 再跑 **查 API**
+3. 仍失败：重跑 **真机**（会刷新 `.env.development.local` 里的局域网 IP）

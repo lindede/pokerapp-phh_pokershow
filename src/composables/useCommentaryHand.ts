@@ -278,18 +278,22 @@ function createCommentaryVoicePlayer(): CommentaryVoicePlayer {
   };
 }
 
-/** 解说 / 语音 API */
-let COMMENTARY_API_URL: string;
-let COMMENTARY_DATA_API_URL: string;
-let VOICE_LIST_API_URL: string;
-let VOICE_DATA_API_URL: string;
-let EQUITY_API_URL: string;
-
-COMMENTARY_API_URL = apiAbsoluteUrl("/v1/CommentaryLite");
-COMMENTARY_DATA_API_URL = apiAbsoluteUrl("/v2/Commentary/data");
-VOICE_LIST_API_URL = apiAbsoluteUrl("/v2/Commentary/voice/list");
-VOICE_DATA_API_URL = apiAbsoluteUrl("/v2/Commentary/voice/data");
-EQUITY_API_URL = apiAbsoluteUrl("/v2/Commentary/additional/equity");
+/** 解说 / 语音 API（每次请求时解析，跟随 project.config.json apiOrigin） */
+function commentaryApiUrl(): string {
+  return apiAbsoluteUrl("/v1/CommentaryLite");
+}
+function commentaryDataApiUrl(): string {
+  return apiAbsoluteUrl("/v2/Commentary/data");
+}
+function voiceListApiUrl(): string {
+  return apiAbsoluteUrl("/v2/Commentary/voice/list");
+}
+function voiceDataApiUrl(): string {
+  return apiAbsoluteUrl("/v2/Commentary/voice/data");
+}
+function equityApiUrl(): string {
+  return apiAbsoluteUrl("/v2/Commentary/additional/equity");
+}
 
 const DEV_COMMENTARY_DATASET_KEY = "all";
 const DEV_COMMENTARY_HAND_INDEX = "-1";
@@ -324,6 +328,43 @@ export interface CommentaryUISnapshot {
   commentaryId?: string | null;
 }
 
+/**
+ * Tab reLaunch 会销毁讲解页：用模块级会话记住离开时的一手牌与进度。
+ * 首启无会话 → 随机加载并自动播；再次进入 → 恢复且不自动播。
+ */
+interface CommentaryTabSession {
+  snapshot: CommentaryUISnapshot;
+  replayStep: number;
+  replayElapsedMs: number;
+  voiceOpen: boolean;
+}
+
+let commentaryTabSession: CommentaryTabSession | null = null;
+
+function cloneCommentarySnapshot(
+  snap: CommentaryUISnapshot,
+): CommentaryUISnapshot {
+  return {
+    datasetKey: snap.datasetKey,
+    handIndex: snap.handIndex,
+    voiceHandIndex: snap.voiceHandIndex,
+    pot: snap.pot,
+    board: [...snap.board],
+    street: snap.street,
+    players: clonePlayers(snap.players),
+    focusPlayerId: snap.focusPlayerId,
+    heroSeatIndex: snap.heroSeatIndex ?? null,
+    commentaryId: snap.commentaryId ?? null,
+    serverSummary: snap.serverSummary,
+    serverByAction: snap.serverByAction.map((x) => ({
+      event_index: x.event_index,
+      text: x.text,
+    })),
+    byActionTimeline: (snap.byActionTimeline ?? []).map((e) => ({ ...e })),
+    replayMeta: cloneReplayMeta(snap.replayMeta),
+  };
+}
+
 export interface LoadCommentaryOptions {
   /** 为 true 时不弹出「已更新」提示（仍弹出错误提示） */
   silentToast?: boolean;
@@ -349,6 +390,12 @@ export interface LoadCommentaryOptions {
   initialCommentaryId?: string;
   /** 本次请求用稳定 id（走 /v2/Commentary/data） */
   requestCommentaryId?: string;
+  /** 与 requestCommentaryId 联用：``next`` 取列表下一条（环回） */
+  requestAct?: "next";
+  /**
+   * 下一局：若响应仍是该 id（列表仅一手），提示且不重开回放。
+   */
+  expectDifferentCommentaryId?: string;
 }
 
 function mergePlayers(target: PlayerState[], incoming: PlayerPayload[]) {
@@ -754,13 +801,13 @@ export function useCommentaryHand() {
   });
 
   function loadEquityForHand(datasetKey: string, handIndex: string) {
-    if (!EQUITY_API_URL?.trim()) return;
+    if (!equityApiUrl()?.trim()) return;
     const k = datasetKey.trim();
     const i = handIndex.trim();
     if (!k || !i) return;
     const reqId = ++equityRequestId;
     uni.request({
-      url: `${EQUITY_API_URL.trim()}?k=${encodeURIComponent(k)}&i=${encodeURIComponent(i)}&_t=${Date.now()}`,
+      url: `${equityApiUrl().trim()}?k=${encodeURIComponent(k)}&i=${encodeURIComponent(i)}&_t=${Date.now()}`,
       method: "GET",
       timeout: 60000,
       success: (res) => {
@@ -811,13 +858,13 @@ export function useCommentaryHand() {
     handIndex: string | number,
     opts?: { skipAutoPlay?: boolean },
   ): Promise<void> {
-    if (!VOICE_LIST_API_URL?.trim()) return Promise.resolve();
+    if (!voiceListApiUrl()?.trim()) return Promise.resolve();
     const capturedK = String(datasetKey).trim();
     const capturedI = String(handIndex).trim();
     if (!capturedK || !isVoiceHandIndexReady(capturedI)) return Promise.resolve();
     const reqId = ++voiceListRequestId;
     resetVoiceState();
-    return fetchVoiceList(VOICE_LIST_API_URL, capturedK, capturedI)
+    return fetchVoiceList(voiceListApiUrl(), capturedK, capturedI)
       .then((map) => {
         if (reqId !== voiceListRequestId) return;
         voiceListDatasetKey = capturedK;
@@ -854,7 +901,7 @@ export function useCommentaryHand() {
   ) {
     if (!state.byActionTimeline.length || state.replayPlaying) return;
     const waitVoice =
-      state.voiceOpen && Boolean(VOICE_LIST_API_URL?.trim());
+      state.voiceOpen && Boolean(voiceListApiUrl()?.trim());
     if (waitVoice) {
       let started = false;
       const startOnce = () => {
@@ -891,12 +938,12 @@ export function useCommentaryHand() {
     const filename = resolveVoiceFilename(ev.event_index, voiceIndexMap);
     if (!filename) return false;
     lastVoiceEventIndex = ev.event_index;
-    if (!VOICE_DATA_API_URL?.trim()) return false;
+    if (!voiceDataApiUrl()?.trim()) return false;
     const voiceK = voiceListDatasetKey ?? state.datasetKey;
     const voiceI = voiceListHandIndex;
     if (!voiceI) return false;
     const url = buildVoiceDataUrl(
-      VOICE_DATA_API_URL,
+      voiceDataApiUrl(),
       voiceK,
       voiceI,
       filename,
@@ -1223,7 +1270,8 @@ export function useCommentaryHand() {
     const voicePromise = applyOpts?.skipVoice
       ? Promise.resolve()
       : loadVoiceForCommentaryMeta(payload, {
-          skipAutoPlay: willAutoplay && state.voiceOpen,
+          // 非自动播：不拉起语音；自动播且语音开：由回放驱动，list 就绪时勿抢播
+          skipAutoPlay: !willAutoplay || state.voiceOpen,
         });
 
     if (state.byActionTimeline.length > 0) {
@@ -1243,7 +1291,7 @@ export function useCommentaryHand() {
     }
   }
 
-  /** 页面刷新 / 首屏：默认 k=all、i=-1；URL 可传 k+id 或 k+i */
+  /** 页面刷新 / 首屏：默认 k=all、i=-1；URL 可传 k / k+id / k+i */
   function loadFresh(opts?: LoadCommentaryOptions) {
     clearNavHistory();
     const k = opts?.initialDatasetKey?.trim();
@@ -1255,9 +1303,9 @@ export function useCommentaryHand() {
       loadApi({ ...opts, requestCommentaryId: id });
       return;
     }
-    if (k && i !== undefined && i !== "") {
+    if (k) {
       state.datasetKey = k;
-      state.handIndex = i;
+      state.handIndex = i !== undefined && i !== "" ? i : DEV_COMMENTARY_HAND_INDEX;
     } else {
       state.datasetKey = DEV_COMMENTARY_DATASET_KEY;
       state.handIndex = DEV_COMMENTARY_HAND_INDEX;
@@ -1296,24 +1344,31 @@ export function useCommentaryHand() {
   /** 请求当前 k / i 下的解说数据 */
   function loadApi(opts?: LoadCommentaryOptions) {
     if (state.loading) return;
-    if (!COMMENTARY_API_URL || !COMMENTARY_API_URL.trim()) {
+    if (!commentaryApiUrl()?.trim()) {
       uni.showToast({
-        title: "请配置 COMMENTARY_API_URL",
+        title: "请配置 API 地址",
         icon: "none",
         duration: 2800,
       });
       return;
     }
     const requestId = opts?.requestCommentaryId?.trim();
+    const requestAct = opts?.requestAct;
+    const expectDifferentId = opts?.expectDifferentCommentaryId?.trim();
     const requestHandIndex = opts?.requestHandIndex ?? String(state.handIndex);
     const sentKey: NavRequestKey = {
       datasetKey: state.datasetKey,
       handIndex: requestId ? DEV_COMMENTARY_HAND_INDEX : requestHandIndex,
     };
     state.loading = true;
-    const url = requestId
-      ? `${COMMENTARY_DATA_API_URL.trim()}?k=${encodeURIComponent(state.datasetKey)}&id=${encodeURIComponent(requestId)}&_t=${Date.now()}`
-      : `${COMMENTARY_API_URL.trim()}?k=${encodeURIComponent(state.datasetKey)}&i=${encodeURIComponent(requestHandIndex)}&_t=${Date.now()}`;
+    let url: string;
+    if (requestId) {
+      const actQ =
+        requestAct === "next" ? `&act=${encodeURIComponent(requestAct)}` : "";
+      url = `${commentaryDataApiUrl().trim()}?k=${encodeURIComponent(state.datasetKey)}&id=${encodeURIComponent(requestId)}${actQ}&_t=${Date.now()}`;
+    } else {
+      url = `${commentaryApiUrl().trim()}?k=${encodeURIComponent(state.datasetKey)}&i=${encodeURIComponent(requestHandIndex)}&_t=${Date.now()}`;
+    }
     const endLoading = () => {
       state.loading = false;
     };
@@ -1329,6 +1384,15 @@ export function useCommentaryHand() {
             rollbackBackNavigationIfNeeded();
             uni.showToast({
               title: "返回数据无法解析",
+              icon: "none",
+              duration: 2500,
+            });
+            return;
+          }
+          const gotId = payload.commentaryId?.trim() || "";
+          if (expectDifferentId && gotId && gotId === expectDifferentId) {
+            uni.showToast({
+              title: "本列表仅一手，无法切换下一局",
               icon: "none",
               duration: 2500,
             });
@@ -1428,8 +1492,18 @@ export function useCommentaryHand() {
     loadApi({ silentToast: true });
   }
 
-  /** 下一局：i = 当前 meta.i + 1 取解说，返回后用新 meta.i 取语音 */
+  /** 下一局：优先 ``id+act=next``；列表仅一手时提示且不重开回放 */
   function loadNextHand() {
+    const curId = state.commentaryId?.trim();
+    if (curId) {
+      loadApi({
+        silentToast: true,
+        requestCommentaryId: curId,
+        requestAct: "next",
+        expectDifferentCommentaryId: curId,
+      });
+      return;
+    }
     const s = String(state.handIndex).trim();
     if (!s || s === DEV_COMMENTARY_HAND_INDEX) {
       uni.showToast({ title: "暂无 meta.i", icon: "none" });
@@ -1440,7 +1514,11 @@ export function useCommentaryHand() {
       uni.showToast({ title: "手牌编号不是数字，无法切换", icon: "none" });
       return;
     }
-    loadApi({ silentToast: true, requestHandIndex: String(cur + 1) });
+    loadApi({
+      silentToast: true,
+      requestHandIndex: String(cur + 1),
+      expectDifferentCommentaryId: curId || undefined,
+    });
   }
 
   /** 重置：不请求网络，用最近一次成功加载的快照重新初始化 UI */
@@ -1520,7 +1598,72 @@ export function useCommentaryHand() {
     uni.showToast({ title: "已重置", icon: "none" });
   }
 
+  function persistTabSession() {
+    if (!serverSnapshot?.byActionTimeline?.length) return;
+    commentaryTabSession = {
+      snapshot: cloneCommentarySnapshot(serverSnapshot),
+      replayStep: state.replayStep,
+      replayElapsedMs: state.replayElapsedMs,
+      voiceOpen: state.voiceOpen,
+    };
+  }
+
+  /**
+   * 从 Tab 会话恢复离开时的一手牌与步进；成功则不再走首屏随机加载。
+   * 不自动播放：需用户点播放。
+   */
+  function restoreSessionIfAny(): boolean {
+    const saved = commentaryTabSession;
+    if (!saved?.snapshot?.byActionTimeline?.length) return false;
+
+    const snap = cloneCommentarySnapshot(saved.snapshot);
+    pauseReplayInternal();
+    state.datasetKey = snap.datasetKey;
+    state.handIndex = snap.handIndex;
+    state.voiceHandIndex = snap.voiceHandIndex ?? snap.handIndex;
+    state.heroSeatIndex = snap.heroSeatIndex ?? null;
+    state.commentaryId = snap.commentaryId ?? null;
+    state.pot = snap.pot;
+    state.voiceOpen = saved.voiceOpen;
+    state.serverSummary = snap.serverSummary;
+    state.serverByAction = snap.serverByAction.map((x) => ({
+      event_index: x.event_index,
+      text: x.text,
+    }));
+
+    const tl = snap.byActionTimeline ?? [];
+    state.byActionTimeline = tl.map((e) => ({ ...e }));
+    state.replayMeta = cloneReplayMeta(snap.replayMeta);
+    state.players = clonePlayers(snap.players);
+    recomputeReplayCumulative();
+
+    const maxStep = Math.max(0, tl.length - 1);
+    const step = Math.min(Math.max(0, Math.floor(saved.replayStep)), maxStep);
+    state.replayStep = step;
+    const stepStart = replayCumulativeMs[step] ?? 0;
+    const stepEnd =
+      step + 1 < replayCumulativeMs.length
+        ? replayCumulativeMs[step + 1]!
+        : state.replayTotalMs;
+    state.replayElapsedMs = Math.min(
+      Math.max(stepStart, saved.replayElapsedMs),
+      stepEnd,
+    );
+    syncReplayFromTimeline({ skipVoice: true });
+    captureSnapshot();
+
+    const voiceI = snap.voiceHandIndex ?? snap.handIndex;
+    if (isVoiceHandIndexReady(voiceI)) {
+      void loadVoiceListForHand(snap.datasetKey, String(voiceI), {
+        skipAutoPlay: true,
+      });
+      loadEquityForHand(snap.datasetKey, String(voiceI));
+    }
+    return true;
+  }
+
   onUnmounted(() => {
+    persistTabSession();
     pauseReplayInternal();
     voicePlayer.destroy();
   });
@@ -1542,5 +1685,6 @@ export function useCommentaryHand() {
     seekReplayStepDelta,
     toggleVoiceOpen,
     setVoiceOpen,
+    restoreSessionIfAny,
   };
 }

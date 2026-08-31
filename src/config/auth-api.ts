@@ -44,6 +44,9 @@ export interface PlatformUser {
   nickname: string;
   avatar_url: string;
   credit_balance: number;
+  effective_balance?: number;
+  credits_expire_at?: string | null;
+  is_beta_tester?: boolean;
   status: string;
 }
 

@@ -1,6 +1,6 @@
 import { computed, reactive, ref } from "vue";
 import type { CommentaryReplayMeta, SeatPositionKey } from "@/types/commentary";
-import { getReviewAnalyzeApiUrl, getReviewParsePhhApiUrl, getReviewArtifactApiUrl, REVIEW_ANALYZE_TIMEOUT_MS } from "@/config/review-api";
+import { getReviewAnalyzeApiUrl, getReviewParsePhhApiUrl, getReviewArtifactApiUrl, getReviewArtifactEntryApiUrl, REVIEW_ANALYZE_TIMEOUT_MS } from "@/config/review-api";
 import { authHeaders } from "@/composables/useAuth";
 import type {
   HeroDecisionReview,
@@ -168,6 +168,9 @@ export function useHandReview(opts?: { useMock?: boolean }) {
   const loading = ref(false);
   const errorMessage = ref("");
   const reviews = ref<HeroDecisionReview[]>([]);
+  /** 点评阶段：沿 byAction 逐步浏览（末尾可多一步整手总结） */
+  const replayStep = ref(0);
+  /** @deprecated 兼容；点评阶段以 replayStep 为准 */
   const reviewCursor = ref(0);
   const analyzeWarnings = ref<string[]>([]);
 
@@ -243,19 +246,60 @@ export function useHandReview(opts?: { useMock?: boolean }) {
     return heroDecisionIndices.value.length > 0;
   });
 
-  const currentReview = computed(() => {
-    if (phase.value !== "reviewing") return null;
-    return reviews.value[reviewCursor.value] ?? null;
+  const decisionReviews = computed(() =>
+    reviews.value.filter((r) => r.kind !== "summary"),
+  );
+  const summaryReview = computed(
+    () => reviews.value.find((r) => r.kind === "summary") ?? null,
+  );
+
+  /** byAction 步数 +（有总结时）末尾总结步 */
+  const replayStepCount = computed(() => {
+    const n = draft.byAction.length;
+    if (!n) return summaryReview.value ? 1 : 0;
+    return summaryReview.value ? n + 1 : n;
   });
 
+  const isOnSummary = computed(
+    () =>
+      Boolean(summaryReview.value) &&
+      replayStep.value >= draft.byAction.length,
+  );
+
+  function reviewForByActionIndex(idx: number): HeroDecisionReview | null {
+    const ev = draft.byAction[idx];
+    if (!ev) return null;
+    const byEi = decisionReviews.value.find(
+      (r) =>
+        typeof r.event_index === "number" && r.event_index === ev.event_index,
+    );
+    if (byEi) return byEi;
+    // analyze 重建 PHH 后 event_index 可能对不上：按 Hero 决策序回退
+    const heroOrd = heroDecisionIndices.value.indexOf(ev.event_index);
+    if (heroOrd >= 0) return decisionReviews.value[heroOrd] ?? null;
+    return null;
+  }
+
+  const currentReview = computed((): HeroDecisionReview | null => {
+    if (phase.value !== "reviewing") return null;
+    if (isOnSummary.value) return summaryReview.value;
+    return reviewForByActionIndex(replayStep.value);
+  });
+
+  const currentStepHasReview = computed(
+    () =>
+      Boolean(currentReview.value) &&
+      currentReview.value?.kind !== "summary",
+  );
+
   const hasPrevDecision = computed(
-    () => phase.value === "reviewing" && reviewCursor.value > 0,
+    () => phase.value === "reviewing" && replayStep.value > 0,
   );
 
   const hasNextDecision = computed(
     () =>
       phase.value === "reviewing" &&
-      reviewCursor.value < reviews.value.length - 1,
+      replayStep.value < Math.max(0, replayStepCount.value - 1),
   );
 
   const replayMeta = computed<CommentaryReplayMeta>(() => ({
@@ -268,30 +312,12 @@ export function useHandReview(opts?: { useMock?: boolean }) {
 
   const tableStepIndex = computed(() => {
     if (!draft.byAction.length) return -1;
-    if (phase.value === "reviewing" && currentReview.value) {
-      const review = currentReview.value;
-      // 总结：看完整时间线
-      if (review.kind === "summary") {
-        return draft.byAction.length - 1;
-      }
-      // 优先按 event_index 对齐（手动录入未重编号时）
-      const byEi = draft.byAction.findIndex(
-        (e) => e.event_index === review.event_index,
+    if (phase.value === "reviewing") {
+      if (isOnSummary.value) return draft.byAction.length - 1;
+      return Math.min(
+        Math.max(0, replayStep.value),
+        draft.byAction.length - 1,
       );
-      if (byEi >= 0) return byEi;
-
-      // analyze 会重建 PHH → HandIR，packet 的 event_index 可能与草稿不一致；
-      // 按「第几个 Hero 决策」映射，避免回退到最后一条摊牌。
-      let decisionOrd = 0;
-      for (let i = 0; i < reviewCursor.value; i++) {
-        if (reviews.value[i]?.kind !== "summary") decisionOrd += 1;
-      }
-      const heroEi = heroDecisionIndices.value[decisionOrd];
-      if (heroEi != null) {
-        const byHero = draft.byAction.findIndex((e) => e.event_index === heroEi);
-        if (byHero >= 0) return byHero;
-      }
-      return draft.byAction.length - 1;
     }
     return draft.byAction.length - 1;
   });
@@ -347,13 +373,17 @@ export function useHandReview(opts?: { useMock?: boolean }) {
       }
       const showHole = seat === hero || Boolean(hole[0] || hole[1]);
       let isFocus = false;
-      if (entryStep.value === "hero_seat" || entryStep.value === "hero_cards") {
+      if (phase.value === "reviewing") {
+        isFocus = snap?.stepSeatFocus === seat;
+      } else if (entryStep.value === "hero_seat" || entryStep.value === "hero_cards") {
         isFocus = seat === hero && heroSeatChosen.value;
       } else if (entryStep.value === "actions") {
         isFocus = nextActorSeat.value === seat;
       } else if (entryStep.value === "showdown") {
-        const isFolded = snap?.folded[seat] ?? false;
-        isFocus = !isFolded && seat !== hero;
+        isFocus =
+          pendingShowdownSeat.value != null
+            ? pendingShowdownSeat.value === seat
+            : false;
       } else {
         isFocus = snap?.stepSeatFocus === seat;
       }
@@ -399,17 +429,37 @@ export function useHandReview(opts?: { useMock?: boolean }) {
     return map[snapshot.value?.street ?? "preflop"] ?? "翻前";
   });
 
+  /** 非决策步：行动摘要（无 LLM 点评时展示） */
+  const replayActionSummary = computed(() => {
+    if (phase.value !== "reviewing" || isOnSummary.value) return "";
+    const snap = snapshot.value;
+    if (!snap) return "";
+    const detail = (snap.stepDetailText || "").trim();
+    if (detail) return detail;
+    const seat =
+      snap.stepSeatFocus != null
+        ? REVIEW_SEAT_LABEL_ZH[REVIEW_SEAT_KEYS[snap.stepSeatFocus]]
+        : "";
+    const act = snap.stepActionZh || snap.stepActionKey || "";
+    return [seat, act].filter(Boolean).join(" · ");
+  });
+
   const stepHeadline = computed(() => {
     if (phase.value === "reviewing") {
+      const tot = Math.max(1, replayStepCount.value);
+      const n = Math.min(replayStep.value + 1, tot);
+      if (isOnSummary.value) {
+        return `${n}/${tot} · 整手总结`;
+      }
       const snap = snapshot.value;
-      if (!snap) return "复盘";
+      if (!snap) return `${n}/${tot}`;
       const seat =
         snap.stepSeatFocus != null
           ? REVIEW_SEAT_LABEL_ZH[REVIEW_SEAT_KEYS[snap.stepSeatFocus]]
           : "";
-      return [seat, snap.stepActionZh || snap.stepActionKey]
-        .filter(Boolean)
-        .join(" · ");
+      const act = snap.stepActionZh || snap.stepActionKey || "";
+      const mid = [seat, act].filter(Boolean).join(" · ");
+      return mid ? `${n}/${tot} · ${mid}` : `${n}/${tot}`;
     }
     if (entryStep.value === "hero_seat") {
       return heroSeatChosen.value
@@ -905,6 +955,7 @@ export function useHandReview(opts?: { useMock?: boolean }) {
     heroSeatChosen.value = false;
     phase.value = "entry";
     reviews.value = [];
+    replayStep.value = 0;
     reviewCursor.value = 0;
     analyzeWarnings.value = [];
     errorMessage.value = "";
@@ -950,6 +1001,7 @@ export function useHandReview(opts?: { useMock?: boolean }) {
     amountDraft.value = "";
     phase.value = "entry";
     reviews.value = [];
+    replayStep.value = 0;
     reviewCursor.value = 0;
     analyzeWarnings.value = [];
     errorMessage.value = "";
@@ -1053,12 +1105,13 @@ export function useHandReview(opts?: { useMock?: boolean }) {
   function applyAnalyzeResponse(res: ReviewAnalyzeResponse) {
     const list = Array.isArray(res.reviews) ? res.reviews : [];
     if (!list.length) {
-      errorMessage.value = "分析结果为空，请重试或按产物 ID 加载";
+      errorMessage.value = "分析结果为空，请重试";
       uni.showToast({ title: errorMessage.value, icon: "none", duration: 2800 });
       return;
     }
     reviews.value = list;
     analyzeWarnings.value = Array.isArray(res.warnings) ? res.warnings : [];
+    replayStep.value = 0;
     reviewCursor.value = 0;
     phase.value = "reviewing";
     errorMessage.value = "";
@@ -1143,10 +1196,10 @@ export function useHandReview(opts?: { useMock?: boolean }) {
         const msg = err instanceof Error ? err.message : "网络错误";
         const timedOut = /timeout|超时/i.test(msg);
         errorMessage.value = timedOut
-          ? "分析超时（本手可能需 4～5 分钟）。若服务端已完成，可用产物 ID 加载结果。"
+          ? "分析超时（本手可能需 4～5 分钟），请稍后在复盘局列表中重试。"
           : msg;
         uni.showToast({
-          title: timedOut ? "分析超时，可尝试加载产物" : msg.slice(0, 40),
+          title: timedOut ? "分析超时" : msg.slice(0, 40),
           icon: "none",
           duration: timedOut ? 3200 : 2200,
         });
@@ -1156,15 +1209,50 @@ export function useHandReview(opts?: { useMock?: boolean }) {
       });
   }
 
-  function loadReviewArtifact(artifactId: string): Promise<boolean> {
+  function requestReviewEntryJson(url: string): Promise<ReviewParsePhhResponse> {
+    return new Promise((resolve, reject) => {
+      uni.request({
+        url,
+        method: "GET",
+        header: { ...authHeaders() },
+        timeout: REVIEW_ANALYZE_TIMEOUT_MS,
+        success: (res) => {
+          const body = res.data as ReviewParsePhhResponse & { detail?: string };
+          if (res.statusCode >= 200 && res.statusCode < 300 && body?.by_action) {
+            resolve(body);
+            return;
+          }
+          const detail =
+            typeof body?.detail === "string"
+              ? body.detail
+              : `加载失败 HTTP ${res.statusCode ?? "?"}`;
+          reject(new Error(detail));
+        },
+        fail: (err) => {
+          const msg =
+            err && typeof err === "object" && "errMsg" in err
+              ? String((err as { errMsg?: string }).errMsg ?? "网络错误")
+              : "网络错误";
+          reject(new Error(msg));
+        },
+      });
+    });
+  }
+
+  /** 从复盘局列表进入：加载牌谱 + 已有点评 */
+  function loadReviewHand(artifactId: string): Promise<boolean> {
     const id = (artifactId || "").trim();
     if (!id) {
-      uni.showToast({ title: "请输入产物 ID", icon: "none" });
+      uni.showToast({ title: "无效复盘局", icon: "none" });
       return Promise.resolve(false);
     }
     loading.value = true;
     errorMessage.value = "";
-    return requestReviewJson(getReviewArtifactApiUrl(id), { method: "GET" })
+    return requestReviewEntryJson(getReviewArtifactEntryApiUrl(id))
+      .then((entry) => {
+        applyParsedPhhDraft(entry);
+        return requestReviewJson(getReviewArtifactApiUrl(id), { method: "GET" });
+      })
       .then((body) => {
         applyAnalyzeResponse(body);
         return true;
@@ -1180,19 +1268,36 @@ export function useHandReview(opts?: { useMock?: boolean }) {
       });
   }
 
+  function syncReviewCursorFromReplay() {
+    if (isOnSummary.value) {
+      reviewCursor.value = Math.max(0, reviews.value.length - 1);
+      return;
+    }
+    const cur = currentReview.value;
+    if (!cur || cur.kind === "summary") {
+      reviewCursor.value = 0;
+      return;
+    }
+    const idx = reviews.value.findIndex((r) => r === cur);
+    reviewCursor.value = idx >= 0 ? idx : 0;
+  }
+
   function goPrevDecision() {
     if (!hasPrevDecision.value) return;
-    reviewCursor.value -= 1;
+    replayStep.value -= 1;
+    syncReviewCursorFromReplay();
   }
 
   function goNextDecision() {
     if (!hasNextDecision.value) return;
-    reviewCursor.value += 1;
+    replayStep.value += 1;
+    syncReviewCursorFromReplay();
   }
 
   function backToEntry() {
     phase.value = "entry";
     reviews.value = [];
+    replayStep.value = 0;
     reviewCursor.value = 0;
     analyzeWarnings.value = [];
     errorMessage.value = "";
@@ -1216,6 +1321,7 @@ export function useHandReview(opts?: { useMock?: boolean }) {
     loading,
     errorMessage,
     reviews,
+    replayStep,
     reviewCursor,
     analyzeWarnings,
     heroDecisionIndices,
@@ -1227,7 +1333,12 @@ export function useHandReview(opts?: { useMock?: boolean }) {
     streetComplete,
     nextStreetToDeal,
     nextStreetLabel,
+    decisionReviews,
+    summaryReview,
+    replayStepCount,
     currentReview,
+    currentStepHasReview,
+    isOnSummary,
     hasPrevDecision,
     hasNextDecision,
     snapshot,
@@ -1236,6 +1347,7 @@ export function useHandReview(opts?: { useMock?: boolean }) {
     bbRealAnchorText,
     streetZh,
     stepHeadline,
+    replayActionSummary,
     nextActorSeat,
     legalActions,
     usedCardCodes,
@@ -1268,7 +1380,7 @@ export function useHandReview(opts?: { useMock?: boolean }) {
     restartEntry,
     importFromPhh,
     startReview,
-    loadReviewArtifact,
+    loadReviewHand,
     goPrevDecision,
     goNextDecision,
     backToEntry,
